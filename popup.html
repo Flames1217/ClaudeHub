@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Claude Switcher</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--brand:#cc785c;--brand-dk:#b86848;--bg:#f5f4ef;--card:#fff;--border:#ece9e4;--t1:#1a1a1a;--t2:#666;--t3:#aaa}
+body{width:320px;min-height:400px;height:560px;font-family:'Segoe UI',-apple-system,sans-serif;background:var(--bg);color:var(--t1);display:flex;flex-direction:column;position:relative}
+
+/* Header */
+.hd{background:linear-gradient(135deg,#cc785c,#b56040);padding:10px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.hd-l{display:flex;align-items:center;gap:8px}
+.logo{width:26px;height:26px;background:rgba(255,255,255,.2);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.hd-title{color:#fff;font-size:13px;font-weight:700}
+.hd-sub{color:rgba(255,255,255,.6);font-size:10px;margin-top:1px}
+.hd-r{display:flex;gap:4px}
+.hbtn{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 9px;border-radius:6px;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;white-space:nowrap;transition:background .15s}
+.hbtn:hover{background:rgba(255,255,255,.28)}
+.hbtn:disabled{opacity:.5;cursor:default}
+
+/* List */
+.list{padding:8px;display:flex;flex-direction:column;gap:6px;overflow-y:auto;flex:1}
+.list::-webkit-scrollbar{width:3px}
+.list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* Card */
+.card{background:var(--card);border-radius:11px;border:2px solid transparent;cursor:pointer;transition:all .15s;box-shadow:0 1px 3px rgba(0,0,0,.06);padding:9px 11px}
+.card:hover{box-shadow:0 2px 8px rgba(204,120,92,.15)}
+.card.active{border-color:var(--brand);background:#fef9f7;cursor:default}
+.card.switching{opacity:.5;pointer-events:none}
+.card-main{display:flex;align-items:center;gap:9px}
+.avatar{width:34px;height:34px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.ci{flex:1;min-width:0}
+.cname{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px}
+.cemail{font-size:10px;color:var(--t2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cnick{font-size:10.5px;color:var(--t3);font-weight:400;flex-shrink:1;overflow:hidden;text-overflow:ellipsis}
+.cr{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap}
+.b-active{background:#d4f0e2;color:#1a7a46}
+.b-free{background:#f0f0f0;color:#666}
+.b-pro{background:#e8f0ff;color:#3b5bdb}
+.b-max{background:#fff0e0;color:#c05a00}
+.b-team{background:#f0e8ff;color:#7048b6}
+.b-ent{background:#ffe8f0;color:#8a0050}
+.b-unk{background:#f5f5f5;color:#999}
+
+/* Switch button */
+.btn-sw{background:var(--brand);color:#fff;border:none;padding:4px 11px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;transition:background .15s;white-space:nowrap}
+.btn-sw:hover{background:var(--brand-dk)}
+
+/* Usage mini */
+.ubar-wrap{height:3px;background:#eee;border-radius:2px;overflow:hidden;margin-top:5px}
+.ubar{height:100%;border-radius:2px}
+.bar-ok{background:linear-gradient(90deg,#5cc98a,#35a864)}
+.bar-warn{background:linear-gradient(90deg,#ffc04d,#f09000)}
+.bar-danger{background:linear-gradient(90deg,#ff6b6b,#e53030)}
+.ubar-label{font-size:9.5px;color:var(--t3);margin-top:2px}
+
+/* 冷却状态 - 红色 */
+.usage-cooldown{margin-top:5px;padding:4px 8px;background:#fdecea;border:1px solid #e53935;border-radius:6px;font-size:10px;color:#c62828;font-weight:600}
+/* 正常可用 - 绿色 */
+.usage-ok{margin-top:4px;font-size:10px;color:#2e7d32;font-weight:600}
+
+/* Active dot */
+.ldot{width:6px;height:6px;background:#3ec87a;border-radius:50%;display:inline-block;animation:pulse 2s ease-in-out infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.7)}}
+
+/* Empty */
+.empty{text-align:center;padding:28px 16px;color:var(--t3)}
+.empty-icon{font-size:32px;margin-bottom:8px}
+.empty-title{font-size:13px;font-weight:600;color:var(--t2);margin-bottom:5px}
+.empty-desc{font-size:11px;line-height:1.65}
+.btn-open{display:inline-block;margin-top:12px;background:var(--brand);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:12px;cursor:pointer}
+
+/* Footer */
+.ft{border-top:1px solid var(--border);padding:6px 10px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.ft-txt{font-size:10px;color:var(--t3)}
+.btn-dash{font-size:10px;color:var(--brand);background:none;border:none;cursor:pointer;padding:2px 5px;border-radius:4px;display:flex;align-items:center;gap:3px}
+.btn-dash:hover{background:rgba(204,120,92,.08)}
+
+/* Modal */
+.overlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center;overflow-y:auto}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:14px;width:288px;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.22);animation:su .18s ease;max-height:520px;overflow-y:auto}
+@keyframes su{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-title{font-size:14px;font-weight:700;margin-bottom:13px}
+.modal-tabs{display:flex;border:1.5px solid #e8e8e8;border-radius:8px;overflow:hidden;margin-bottom:13px}
+.mtab{flex:1;padding:6px;text-align:center;font-size:11.5px;cursor:pointer;background:#fff;color:#888;border:none;transition:all .15s}
+.mtab.active{background:var(--brand);color:#fff;font-weight:600}
+.fgroup{margin-bottom:10px}
+.flabel{font-size:11.5px;color:#555;font-weight:500;margin-bottom:4px;display:block}
+.finput{width:100%;padding:7px 9px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:12.5px;outline:none;transition:border-color .15s}
+.finput:focus{border-color:var(--brand)}
+.fhint{font-size:10.5px;color:#aaa;margin-top:4px;line-height:1.55}
+.modal-desc{font-size:12px;color:#555;line-height:1.7;margin-bottom:11px}
+.modal-btns{display:flex;gap:7px;margin-top:13px}
+.btn-cancel{flex:1;padding:8px;background:#f0f0f0;color:#666;border:none;border-radius:8px;font-size:12px;cursor:pointer}
+.btn-cancel:hover{background:#e5e5e5}
+.btn-confirm{flex:2;padding:8px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer}
+.btn-confirm:hover{background:var(--brand-dk)}
+
+/* Toast & Spin */
+.toast{position:fixed;bottom:8px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:5px 14px;border-radius:8px;font-size:11px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;z-index:999}
+.toast.show{opacity:1}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:rot .6s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="hd">
+  <div class="hd-l">
+    <div class="logo">✳</div>
+    <div>
+      <div class="hd-title">Claude Switcher</div>
+      <div class="hd-sub" id="hdr-sub">加载中...</div>
+    </div>
+  </div>
+  <div class="hd-r">
+    <button class="hbtn" id="btn-refresh" title="刷新当前账号">⟳</button>
+    <button class="hbtn" id="btn-add">＋ 添加</button>
+  </div>
+</div>
+
+<div class="list" id="list">
+  <div style="text-align:center;padding:24px 0">
+    <div class="spin" style="width:18px;height:18px;border-width:2px;border-top-color:#cc785c;border-color:rgba(0,0,0,.1);margin:0 auto 8px"></div>
+    <div style="font-size:11px;color:#bbb">加载中...</div>
+  </div>
+</div>
+
+<div class="ft">
+  <span class="ft-txt">本地存储 · 不上传</span>
+  <button class="btn-dash" id="btn-dash">⚙ 管理面板</button>
+</div>
+
+<!-- Add Modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-title">添加 Claude 账号</div>
+    <div class="modal-tabs">
+      <button class="mtab active" data-tab="auto">⚡ 自动抓取</button>
+      <button class="mtab" data-tab="manual">✏️ 手动输入</button>
+    </div>
+    <div id="panel-auto">
+      <div class="modal-desc">自动读取登录信息。<br>若已登录 claude.ai，直接点「✓ 添加」。<br>若未登录，会自动打开登录页，登录后自动抓取。</div>
+      <div class="fgroup">
+        <label class="flabel">备注名称（可选）</label>
+        <input class="finput" id="auto-nick" placeholder="工作号、个人号..." />
+      </div>
+    </div>
+    <div id="panel-manual" style="display:none">
+      <div class="fgroup">
+        <label class="flabel">邮箱 / 备注名 <span style="color:#e57373">*</span></label>
+        <input class="finput" id="m-email" placeholder="example@gmail.com" />
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Session Key <span style="color:#e57373">*</span></label>
+        <input class="finput" id="m-session" placeholder="sk-ant-sid01-..." />
+        <div class="fhint">F12 → Application → Cookies → sessionKey → 复制 Value</div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" id="btn-cancel">取消</button>
+      <button class="btn-confirm" id="btn-confirm">✓ 添加</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="popup.js"></script>
+</body>
+</html>

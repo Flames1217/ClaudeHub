@@ -1,0 +1,14 @@
+# Sensitive local backups (contain sessionKey/cookies)
+claude_accounts*.json
+!claude_accounts.sample.json
+
+# Local runtime/export artifacts
+*.tmp
+*.bak
+*.local.json
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

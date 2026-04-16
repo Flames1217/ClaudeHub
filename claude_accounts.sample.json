@@ -1,0 +1,31 @@
+[
+  {
+    "sessionKey": "sk-ant-sidXX-REDACTED",
+    "email": "示例用户@example.com",
+    "name": "示例用户",
+    "nickname": "工作账号",
+    "plan": "专业版",
+    "userId": "user_123456",
+    "valid": true,
+    "cookies": [
+      {
+        "domain": ".claude.ai",
+        "name": "sessionKey",
+        "path": "/",
+        "secure": true,
+        "httpOnly": false,
+        "sameSite": "no_restriction",
+        "value": "sk-ant-sidXX-REDACTED"
+      }
+    ],
+    "usage": {
+      "five_hour": null,
+      "seven_day": null,
+      "message_limit": null,
+      "free_limit": null
+    },
+    "addedAt": 0,
+    "lastUsed": 0,
+    "refreshedAt": 0
+  }
+]

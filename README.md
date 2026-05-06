@@ -2,6 +2,16 @@
 
 一个用于在 Chrome/Edge 中快速切换和管理多个 `claude.ai` 账号的 Manifest V3 浏览器扩展。
 
+## 截图预览
+
+<img src="images/big.png">
+<img src="images/adduser.png">
+<img src="images/settings.png">
+<p align="center">
+  <img src="images/small.png" width="46%"/>
+  <img src="images/90.png" width="48%"/>
+</p>
+
 ## 功能特性
 
 - 多账号本地存储（`chrome.storage.local`）

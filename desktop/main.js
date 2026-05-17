@@ -22,6 +22,7 @@ function createWindow() {
     minWidth: 980,
     minHeight: 680,
     title: 'Claude Cockpit',
+    icon: path.join(__dirname, '..', 'icons', 'icon256.png'),
     backgroundColor: '#f6f3ee',
     webPreferences: {
       preload: `${__dirname}/preload.js`,

@@ -1,6 +1,6 @@
 {
   "name": "claude-cockpit",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Claude 多账号聚合桌面聊天 cockpit。",
   "main": "desktop/main.js",
   "scripts": {
@@ -25,10 +25,10 @@
     "directories": {
       "output": "release"
     },
-    "icon": "build/icon.png",
+    "icon": "icons/icon256.png",
     "files": [
       "desktop/**/*",
-      "build/icon.png",
+      "icons/**/*",
       "package.json",
       "LICENSE",
       "!claude_accounts*.json",

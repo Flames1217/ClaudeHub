@@ -60,12 +60,9 @@ button {
   width: 42px;
   height: 42px;
   border-radius: 8px;
-  display: grid;
-  place-items: center;
   background: var(--accent);
-  color: #fff;
-  font-weight: 800;
-  font-size: 20px;
+  object-fit: contain;
+  padding: 5px;
 }
 
 .brand-title {

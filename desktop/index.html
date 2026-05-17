@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Cockpit</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <aside class="rail">
+    <div class="brand">
+      <div class="brand-mark">C</div>
+      <div>
+        <div class="brand-title">Claude Cockpit</div>
+        <div class="brand-subtitle">多账号聚合桌面层</div>
+      </div>
+    </div>
+
+    <section class="panel conversations-panel">
+      <div class="panel-head">
+        <span>对话</span>
+        <button class="icon-btn" id="newConversationBtn" title="新建对话">+</button>
+      </div>
+      <div class="conversation-list" id="conversationList"></div>
+    </section>
+
+    <section class="panel accounts-panel">
+      <div class="panel-head">
+        <span>账号池</span>
+        <div class="panel-actions">
+          <button class="small-btn" id="refreshAccountsBtn">刷新</button>
+          <button class="small-btn" id="importBtn">导入</button>
+        </div>
+      </div>
+      <div class="account-list" id="accountList"></div>
+    </section>
+  </aside>
+
+  <main class="workspace">
+    <header class="topbar">
+      <div>
+        <div class="chat-title" id="chatTitle">新的对话</div>
+        <div class="chat-meta" id="chatMeta">本地统一会话，账号可自动接力</div>
+      </div>
+      <div class="top-actions">
+        <select id="accountSelect" class="account-select" title="指定本次使用账号">
+          <option value="">自动选择账号</option>
+        </select>
+        <button class="secondary-btn" id="openStoreBtn">打开数据文件</button>
+      </div>
+    </header>
+
+    <section class="messages" id="messages"></section>
+
+    <footer class="composer">
+      <textarea id="messageInput" placeholder="输入消息。额度用完时，后续会由其他账号接力。" rows="3"></textarea>
+      <button class="send-btn" id="sendBtn">发送</button>
+    </footer>
+  </main>
+
+  <script src="./renderer.js"></script>
+</body>
+</html>

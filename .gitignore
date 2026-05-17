@@ -6,6 +6,13 @@ claude_accounts*.json
 *.tmp
 *.bak
 *.local.json
+node_modules/
+dist/
+out/
+release/
+release-*/
+release-build/
+release-final/
 
 # IDE / OS
 .idea/

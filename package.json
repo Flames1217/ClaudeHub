@@ -1,0 +1,72 @@
+{
+  "name": "claude-switcher-cockpit",
+  "version": "0.1.0",
+  "description": "Claude 多账号聚合桌面聊天 cockpit。",
+  "main": "desktop/main.js",
+  "scripts": {
+    "desktop": "electron .",
+    "check": "node --check desktop/main.js && node --check desktop/preload.js && node --check desktop/store.js && node --check desktop/account-router.js && node --check desktop/claude-executor.js && node --check desktop/renderer.js && node --check background.js && node --check content.js && node --check popup.js && node --check dashboard.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win nsis portable"
+  },
+  "keywords": [
+    "claude",
+    "desktop",
+    "electron",
+    "account-switcher",
+    "multi-account",
+    "cockpit"
+  ],
+  "author": "",
+  "license": "MIT",
+  "build": {
+    "appId": "com.viper373.claude-cockpit",
+    "productName": "Claude Cockpit",
+    "directories": {
+      "output": "release"
+    },
+    "icon": "build/icon.png",
+    "files": [
+      "desktop/**/*",
+      "build/icon.png",
+      "package.json",
+      "LICENSE",
+      "!claude_accounts*.json",
+      "!**/*.local.json",
+      "!**/*.tmp",
+      "!**/*.bak"
+    ],
+    "asar": true,
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Claude Cockpit"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    }
+  },
+  "devDependencies": {
+    "electron": "^30.5.1",
+    "electron-builder": "^24.13.3"
+  }
+}

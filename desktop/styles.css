@@ -85,6 +85,32 @@ button {
   font-size: 12px;
 }
 
+.side-nav {
+  display: flex;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  background: var(--surface);
+}
+
+.nav-item {
+  flex: 1;
+  height: 30px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.nav-item.active,
+.nav-item:hover {
+  background: #fff3ed;
+  color: var(--accent-dark);
+}
+
 .panel {
   min-height: 0;
   display: flex;
@@ -139,6 +165,11 @@ button {
 .open-account-btn {
   background: #efe8df;
   color: var(--text);
+}
+
+.small-btn.primary {
+  background: var(--accent);
+  color: #fff;
 }
 
 .small-btn {
@@ -394,6 +425,11 @@ textarea:focus {
   font-weight: 800;
 }
 
+.send-btn.slim {
+  min-height: 38px;
+  padding: 0 16px;
+}
+
 .send-btn:hover,
 .icon-btn:hover {
   background: var(--accent-dark);
@@ -402,6 +438,197 @@ textarea:focus {
 .send-btn:disabled {
   opacity: .55;
   cursor: default;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: rgba(29, 27, 24, .34);
+  padding: 24px;
+}
+
+.modal {
+  width: min(720px, 100%);
+  max-height: min(720px, 92vh);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fffcf8;
+  box-shadow: 0 22px 70px rgba(46, 35, 24, .22);
+}
+
+.update-modal {
+  width: min(680px, 100%);
+}
+
+.modal-header {
+  min-height: 74px;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.modal-header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: #efe8df;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.modal-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px 0;
+}
+
+.modal-tab {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 7px 7px 0 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.modal-tab.active {
+  background: var(--surface);
+  color: var(--accent-dark);
+  border: 1px solid var(--border);
+  border-bottom-color: var(--surface);
+}
+
+.modal-body {
+  overflow: auto;
+  padding: 18px 20px 20px;
+}
+
+.import-pane {
+  display: none;
+}
+
+.import-pane.active {
+  display: block;
+}
+
+.import-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.import-card span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.import-textarea {
+  width: 100%;
+  min-height: 220px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.modal-message {
+  min-height: 24px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.modal-message.success {
+  color: var(--green);
+}
+
+.modal-message.error {
+  color: var(--red);
+}
+
+.update-status-box {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.update-progress {
+  display: grid;
+  grid-template-columns: 1fr 48px;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.update-progress-bar {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eee1d8;
+}
+
+#updateProgressFill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width .16s ease;
+}
+
+#updateProgressText {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.release-notes {
+  max-height: 220px;
+  overflow: auto;
+  margin: 14px 0 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 @media (max-width: 1040px) {

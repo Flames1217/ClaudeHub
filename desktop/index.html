@@ -16,6 +16,12 @@
       </div>
     </div>
 
+    <nav class="side-nav">
+      <button class="nav-item active" type="button">对话</button>
+      <button class="nav-item" type="button" id="accountsNavBtn">账号</button>
+      <button class="nav-item" type="button" id="updateNavBtn">更新</button>
+    </nav>
+
     <section class="panel conversations-panel">
       <div class="panel-head">
         <span>对话</span>
@@ -29,7 +35,7 @@
         <span>账号池</span>
         <div class="panel-actions">
           <button class="small-btn" id="refreshAccountsBtn">刷新</button>
-          <button class="small-btn" id="importBtn">导入</button>
+          <button class="small-btn primary" id="importBtn">导入</button>
         </div>
       </div>
       <div class="account-list" id="accountList"></div>
@@ -43,6 +49,7 @@
         <div class="chat-meta" id="chatMeta">本地统一会话，账号可自动接力</div>
       </div>
       <div class="top-actions">
+        <button class="secondary-btn" id="checkUpdateBtn">检查更新</button>
         <select id="accountSelect" class="account-select" title="指定本次使用账号">
           <option value="">自动选择账号</option>
         </select>
@@ -57,6 +64,74 @@
       <button class="send-btn" id="sendBtn">发送</button>
     </footer>
   </main>
+
+  <div class="modal-overlay hidden" id="importModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <h2>导入账号</h2>
+          <p>支持 Claude Cockpit、claude_accounts、Cookie JSON、sessionKey 文本和多文件导入。</p>
+        </div>
+        <button class="modal-close" id="closeImportModal" type="button">×</button>
+      </div>
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-import-tab="files" type="button">文件导入</button>
+        <button class="modal-tab" data-import-tab="paste" type="button">粘贴导入</button>
+        <button class="modal-tab" data-import-tab="local" type="button">本地数据</button>
+      </div>
+      <div class="modal-body">
+        <section class="import-pane active" data-import-pane="files">
+          <div class="import-card">
+            <strong>选择一个或多个 JSON/TXT 文件</strong>
+            <span>兼容数组、{ accounts: [...] }、单账号对象、Cookie 导出对象和纯 sessionKey 文本。</span>
+            <button class="secondary-btn" id="chooseImportFilesBtn" type="button">选择文件导入</button>
+          </div>
+        </section>
+        <section class="import-pane" data-import-pane="paste">
+          <textarea id="importText" class="import-textarea" placeholder='粘贴 JSON、Cookie 行或 sessionKey，例如 {"sessionKey":"sk-ant-sid01-..."}'></textarea>
+          <div class="modal-actions">
+            <button class="secondary-btn" id="pasteExampleBtn" type="button">填入示例</button>
+            <button class="send-btn slim" id="pasteImportBtn" type="button">导入粘贴内容</button>
+          </div>
+        </section>
+        <section class="import-pane" data-import-pane="local">
+          <div class="import-card">
+            <strong>从当前数据文件重新导入</strong>
+            <span>用于迁移、去重或恢复当前应用数据中的账号条目。</span>
+            <button class="secondary-btn" id="importCurrentStoreBtn" type="button">读取当前数据文件</button>
+          </div>
+        </section>
+        <div class="modal-message" id="importMessage"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="updateModal">
+    <div class="modal update-modal">
+      <div class="modal-header">
+        <div>
+          <h2>应用更新</h2>
+          <p id="updateSubtitle">从 GitHub Releases 检查新版本。</p>
+        </div>
+        <button class="modal-close" id="closeUpdateModal" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="update-status-box" id="updateStatusBox">准备检查更新。</div>
+        <div class="update-progress hidden" id="updateProgressWrap">
+          <div class="update-progress-bar">
+            <div id="updateProgressFill"></div>
+          </div>
+          <span id="updateProgressText">0%</span>
+        </div>
+        <pre class="release-notes" id="releaseNotes"></pre>
+        <div class="modal-actions">
+          <button class="secondary-btn" id="manualCheckUpdateBtn" type="button">检查</button>
+          <button class="send-btn slim hidden" id="downloadUpdateBtn" type="button">下载并安装</button>
+          <button class="send-btn slim hidden" id="restartUpdateBtn" type="button">立即重启</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="./renderer.js"></script>
 </body>

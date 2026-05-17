@@ -81,15 +81,27 @@ function createStore(userDataPath) {
   }
 
   function importAccounts(accounts) {
+    const stats = { imported: 0, updated: 0, skipped: 0 };
     return update((state) => {
       const byKey = new Map(state.accounts.filter((item) => item.sessionKey).map((item) => [item.sessionKey, item]));
       for (const incoming of accounts) {
         const normalized = normalizeAccount(incoming);
-        if (!normalized.sessionKey) continue;
-        byKey.set(normalized.sessionKey, { ...(byKey.get(normalized.sessionKey) || {}), ...normalized });
+        if (!normalized.sessionKey) {
+          stats.skipped += 1;
+          continue;
+        }
+        const existing = byKey.get(normalized.sessionKey);
+        if (existing) stats.updated += 1;
+        else stats.imported += 1;
+        byKey.set(normalized.sessionKey, { ...(existing || {}), ...normalized });
       }
       state.accounts = Array.from(byKey.values()).sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0));
       if (!state.currentAccountId && state.accounts[0]) state.currentAccountId = state.accounts[0].id;
+      state.lastImportResult = {
+        ...stats,
+        total: accounts.length,
+        finishedAt: Date.now()
+      };
       return state;
     });
   }

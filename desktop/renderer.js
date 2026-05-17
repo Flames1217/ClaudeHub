@@ -1,4 +1,5 @@
 let state = null;
+let latestUpdateInfo = null;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -41,7 +42,7 @@ function statusClass(account) {
 function renderConversations() {
   const list = $('#conversationList');
   if (!state.conversations.length) {
-    list.innerHTML = '<div class="empty">还没有对话<br>点右上角 + 创建第一场</div>';
+    list.innerHTML = '<div class="empty">还没有对话<br>点击右上角 + 创建第一场</div>';
     return;
   }
 
@@ -73,7 +74,7 @@ function renderAccounts() {
   }
 
   if (!state.accounts.length) {
-    list.innerHTML = '<div class="empty">暂无账号<br>导入 claude_accounts JSON 后开始</div>';
+    list.innerHTML = '<div class="empty">暂无账号<br>点击“导入”添加 JSON、Cookie 或 sessionKey</div>';
     return;
   }
 
@@ -133,7 +134,7 @@ function renderMessages() {
       <div class="empty">
         <div>
           <strong>先导入账号，然后直接聊天。</strong><br>
-          第一版会展示账号路由和续聊提示；真实 Web 自动执行层后续接入。
+          后续会展示账号路由和续聊提示；真实 Web 自动执行层会继续接入。
         </div>
       </div>
     `;
@@ -201,36 +202,167 @@ async function sendMessage() {
   }
 }
 
-$('#newConversationBtn').addEventListener('click', async () => {
-  state = await window.cockpit.newConversation();
-  render();
-  $('#messageInput').focus();
-});
+function showImportModal() {
+  $('#importMessage').textContent = '';
+  $('#importModal').classList.remove('hidden');
+}
 
-$('#importBtn').addEventListener('click', async () => {
-  state = await window.cockpit.importAccounts();
-  render();
-});
+function hideImportModal() {
+  $('#importModal').classList.add('hidden');
+}
 
-$('#refreshAccountsBtn').addEventListener('click', async () => {
-  $('#refreshAccountsBtn').disabled = true;
+function setImportMessage(text, tone = '') {
+  const node = $('#importMessage');
+  node.textContent = text;
+  node.className = `modal-message ${tone}`;
+}
+
+async function runImport(action) {
+  setImportMessage('正在导入...');
   try {
-    state = await window.cockpit.refreshAccounts();
+    state = await action();
+    const result = state.lastImportResult;
+    setImportMessage(`导入完成：新增 ${result?.imported || 0}，更新 ${result?.updated || 0}，跳过 ${result?.skipped || 0}。`, 'success');
     render();
-  } finally {
-    $('#refreshAccountsBtn').disabled = false;
+  } catch (error) {
+    setImportMessage(error.message || String(error), 'error');
   }
-});
+}
 
-$('#openStoreBtn').addEventListener('click', () => window.cockpit.openStoreFile());
+function showUpdateModal() {
+  $('#updateModal').classList.remove('hidden');
+}
 
-$('#sendBtn').addEventListener('click', sendMessage);
+function hideUpdateModal() {
+  $('#updateModal').classList.add('hidden');
+}
 
-$('#messageInput').addEventListener('keydown', (event) => {
-  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-    event.preventDefault();
-    sendMessage();
+function setUpdateStatus(text) {
+  $('#updateStatusBox').textContent = text;
+}
+
+function setUpdateProgress(percent) {
+  const value = Math.max(0, Math.min(100, Math.round(percent || 0)));
+  $('#updateProgressWrap').classList.remove('hidden');
+  $('#updateProgressFill').style.width = `${value}%`;
+  $('#updateProgressText').textContent = `${value}%`;
+}
+
+function renderUpdateInfo(info) {
+  latestUpdateInfo = info;
+  $('#downloadUpdateBtn').classList.remove('hidden');
+  $('#restartUpdateBtn').classList.add('hidden');
+  const version = info?.version || info?.tag || info?.releaseName || '新版本';
+  setUpdateStatus(`发现 ${version}，点击下载并安装。`);
+  $('#releaseNotes').textContent = info?.releaseNotes || info?.release_notes || '';
+}
+
+async function checkUpdate() {
+  showUpdateModal();
+  setUpdateStatus('正在检查 GitHub Releases...');
+  $('#downloadUpdateBtn').classList.add('hidden');
+  $('#restartUpdateBtn').classList.add('hidden');
+  $('#updateProgressWrap').classList.add('hidden');
+  $('#releaseNotes').textContent = '';
+  try {
+    const result = await window.cockpit.checkUpdate();
+    if (result.status === 'dev') {
+      setUpdateStatus(result.message);
+    } else if (result.updateInfo) {
+      renderUpdateInfo(result.updateInfo);
+    } else {
+      setUpdateStatus('当前已经是最新版本。');
+    }
+  } catch (error) {
+    setUpdateStatus(error.message || String(error));
   }
-});
+}
 
+function wireEvents() {
+  $('#newConversationBtn').addEventListener('click', async () => {
+    state = await window.cockpit.newConversation();
+    render();
+    $('#messageInput').focus();
+  });
+
+  $('#importBtn').addEventListener('click', showImportModal);
+  $('#accountsNavBtn').addEventListener('click', showImportModal);
+  $('#closeImportModal').addEventListener('click', hideImportModal);
+  $('#importModal').addEventListener('click', (event) => {
+    if (event.target === $('#importModal')) hideImportModal();
+  });
+
+  document.querySelectorAll('[data-import-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('[data-import-tab]').forEach((tab) => tab.classList.remove('active'));
+      document.querySelectorAll('[data-import-pane]').forEach((pane) => pane.classList.remove('active'));
+      button.classList.add('active');
+      document.querySelector(`[data-import-pane="${button.dataset.importTab}"]`).classList.add('active');
+    });
+  });
+
+  $('#chooseImportFilesBtn').addEventListener('click', () => runImport(() => window.cockpit.importAccounts()));
+  $('#pasteImportBtn').addEventListener('click', () => runImport(() => window.cockpit.importAccountsFromText($('#importText').value)));
+  $('#importCurrentStoreBtn').addEventListener('click', () => runImport(() => window.cockpit.importCurrentStore()));
+  $('#pasteExampleBtn').addEventListener('click', () => {
+    $('#importText').value = JSON.stringify([{ email: 'name@example.com', sessionKey: 'sk-ant-sid01-your-session-key' }], null, 2);
+  });
+
+  $('#refreshAccountsBtn').addEventListener('click', async () => {
+    $('#refreshAccountsBtn').disabled = true;
+    try {
+      state = await window.cockpit.refreshAccounts();
+      render();
+    } finally {
+      $('#refreshAccountsBtn').disabled = false;
+    }
+  });
+
+  $('#openStoreBtn').addEventListener('click', () => window.cockpit.openStoreFile());
+  $('#sendBtn').addEventListener('click', sendMessage);
+  $('#messageInput').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      sendMessage();
+    }
+  });
+
+  $('#checkUpdateBtn').addEventListener('click', checkUpdate);
+  $('#updateNavBtn').addEventListener('click', checkUpdate);
+  $('#manualCheckUpdateBtn').addEventListener('click', checkUpdate);
+  $('#closeUpdateModal').addEventListener('click', hideUpdateModal);
+  $('#updateModal').addEventListener('click', (event) => {
+    if (event.target === $('#updateModal')) hideUpdateModal();
+  });
+  $('#downloadUpdateBtn').addEventListener('click', async () => {
+    setUpdateStatus(`正在下载 ${latestUpdateInfo?.version || '新版本'}...`);
+    $('#downloadUpdateBtn').disabled = true;
+    try {
+      await window.cockpit.downloadUpdate();
+    } catch (error) {
+      setUpdateStatus(error.message || String(error));
+      $('#downloadUpdateBtn').disabled = false;
+    }
+  });
+  $('#restartUpdateBtn').addEventListener('click', () => window.cockpit.installUpdate());
+
+  window.cockpit.onUpdateEvent((payload) => {
+    if (payload.type === 'checking') setUpdateStatus('正在检查 GitHub Releases...');
+    if (payload.type === 'available') renderUpdateInfo(payload.info);
+    if (payload.type === 'not-available') setUpdateStatus('当前已经是最新版本。');
+    if (payload.type === 'progress') setUpdateProgress(payload.progress?.percent || 0);
+    if (payload.type === 'downloaded') {
+      setUpdateProgress(100);
+      setUpdateStatus('更新已下载完成。点击立即重启，应用会自动完成安装。');
+      $('#downloadUpdateBtn').classList.add('hidden');
+      $('#restartUpdateBtn').classList.remove('hidden');
+    }
+    if (payload.type === 'error') {
+      setUpdateStatus(payload.message || '更新失败');
+      $('#downloadUpdateBtn').disabled = false;
+    }
+  });
+}
+
+wireEvents();
 refresh();

@@ -1,6 +1,6 @@
 {
   "name": "claude-cockpit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Claude 多账号聚合桌面聊天 cockpit。",
   "main": "desktop/main.js",
   "scripts": {
@@ -37,6 +37,13 @@
       "!**/*.bak"
     ],
     "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Flames1217",
+        "repo": "claude-cockpit"
+      }
+    ],
     "win": {
       "signAndEditExecutable": false,
       "target": [
@@ -55,8 +62,8 @@
       ]
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Claude Cockpit"
@@ -68,5 +75,8 @@
   "devDependencies": {
     "electron": "^30.5.1",
     "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   }
 }

@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, Tray, Menu } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { createStore } = require('./store');
 const { routeAccount, buildHandoffPrompt } = require('./account-router');
@@ -10,6 +10,8 @@ let mainWindow;
 let store;
 let refreshTimer = null;
 let updateInfo = null;
+let tray = null;
+let isQuitting = false;
 
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = false;
@@ -32,6 +34,7 @@ function createWindow() {
   });
 
   mainWindow.loadFile(`${__dirname}/index.html`);
+  mainWindow.on('close', handleMainWindowClose);
 }
 
 function ensureConversation(state) {
@@ -46,9 +49,85 @@ function sendUpdateEvent(type, payload = {}) {
   mainWindow.webContents.send('app:update-event', { type, ...payload });
 }
 
+function createTray() {
+  if (tray) return tray;
+  tray = new Tray(path.join(__dirname, '..', 'icons', 'icon256.png'));
+  tray.setToolTip('Claude Cockpit');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    {
+      label: '显示 Claude Cockpit',
+      click: showMainWindow
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]));
+  tray.on('double-click', showMainWindow);
+  tray.on('click', showMainWindow);
+  return tray;
+}
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  }
+  mainWindow.show();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+}
+
+async function handleMainWindowClose(event) {
+  if (isQuitting) return;
+
+  const closeBehavior = store.read().settings.closeBehavior || 'ask';
+  if (closeBehavior === 'quit') {
+    isQuitting = true;
+    return;
+  }
+  if (closeBehavior === 'minimize-to-tray') {
+    event.preventDefault();
+    mainWindow.hide();
+    return;
+  }
+
+  event.preventDefault();
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: 'question',
+    title: '关闭 Claude Cockpit',
+    message: '关闭窗口时要怎么处理？',
+    detail: '选择“最小化到托盘”后，应用会继续在右下角托盘运行；可通过托盘图标右键退出。',
+    buttons: ['最小化到托盘', '退出应用', '取消'],
+    defaultId: 0,
+    cancelId: 2,
+    checkboxLabel: '记住我的选择',
+    checkboxChecked: false,
+    noLink: true
+  });
+
+  if (result.response === 2) return;
+
+  const nextBehavior = result.response === 0 ? 'minimize-to-tray' : 'quit';
+  if (result.checkboxChecked) {
+    store.updateSettings({ closeBehavior: nextBehavior });
+  }
+
+  if (nextBehavior === 'minimize-to-tray') {
+    mainWindow.hide();
+  } else {
+    isQuitting = true;
+    app.quit();
+  }
+}
+
 app.whenReady().then(() => {
   store = createStore(app.getPath('userData'));
   createWindow();
+  createTray();
   startAccountRefreshScheduler();
 
   app.on('activate', () => {
@@ -57,7 +136,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin' && isQuitting) app.quit();
 });
 
 ipcMain.handle('app:get-state', async () => store.read());

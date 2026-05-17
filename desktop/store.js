@@ -12,7 +12,8 @@ const EMPTY_STATE = {
     contextMessageLimit: 12,
     summaryMaxChars: 1800,
     autoRoute: true,
-    autoRefreshIntervalMs: 5 * 60 * 1000
+    autoRefreshIntervalMs: 5 * 60 * 1000,
+    closeBehavior: 'ask'
   }
 };
 
@@ -27,7 +28,16 @@ function createStore(userDataPath) {
     try {
       if (!fs.existsSync(filePath)) return structuredClone(EMPTY_STATE);
       const raw = fs.readFileSync(filePath, 'utf8');
-      return { ...structuredClone(EMPTY_STATE), ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      const base = structuredClone(EMPTY_STATE);
+      return {
+        ...base,
+        ...parsed,
+        settings: {
+          ...base.settings,
+          ...(parsed.settings || {})
+        }
+      };
     } catch (error) {
       console.error('[store] read failed:', error);
       return structuredClone(EMPTY_STATE);
@@ -121,6 +131,16 @@ function createStore(userDataPath) {
     });
   }
 
+  function updateSettings(patch) {
+    return update((state) => {
+      state.settings = {
+        ...state.settings,
+        ...patch
+      };
+      return state;
+    });
+  }
+
   function replaceAccounts(accounts) {
     return update((state) => {
       state.accounts = accounts;
@@ -197,6 +217,7 @@ function createStore(userDataPath) {
     importAccounts,
     updateAccount,
     setCurrentAccount,
+    updateSettings,
     replaceAccounts,
     listConversations,
     createConversation,

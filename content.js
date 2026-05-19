@@ -378,22 +378,42 @@ function snapshotConversation() {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
+  const hasClassLike = (el, needle) => {
+    const cls = String(el?.className || '').toLowerCase();
+    return cls.includes(needle) || !!el?.querySelector?.(`[class*="${needle}"]`);
+  };
+
   const getRole = (el) => {
-    const role = (el.getAttribute('data-message-author-role') || '').toLowerCase();
-    const testId = (el.getAttribute('data-testid') || '').toLowerCase();
+    const roleNode = el.closest?.('[data-message-author-role]');
+    const role = ((roleNode || el).getAttribute('data-message-author-role') || '').toLowerCase();
+    const testNode = el.closest?.('[data-testid]');
+    const testId = [
+      el.getAttribute('data-testid') || '',
+      testNode?.getAttribute('data-testid') || ''
+    ].join(' ').toLowerCase();
     const cls = String(el.className || '').toLowerCase();
     if (role.includes('user') || testId.includes('user') || testId.includes('human')) return 'User';
-    if (role.includes('assistant') || testId.includes('assistant') || testId.includes('ai-turn') || cls.includes('font-claude-message')) return 'Claude';
+    if (
+      role.includes('assistant') ||
+      testId.includes('assistant') ||
+      testId.includes('ai-turn') ||
+      cls.includes('font-claude-message') ||
+      hasClassLike(el, 'font-claude-message') ||
+      el.querySelector?.('[data-message-author-role="assistant"], [data-testid*="assistant"], [data-testid*="ai-turn"]')
+    ) return 'Claude';
     return null;
   };
 
   const selector = [
     '[data-message-author-role]',
+    '[data-testid*="conversation-turn"]',
+    '[data-testid*="message"]',
     '[data-testid="user-message"]',
     '[data-testid="human-turn"]',
     '[data-testid="assistant-message"]',
     '[data-testid="ai-turn"]',
-    '.font-claude-message'
+    '.font-claude-message',
+    '[class*="font-claude-message"]'
   ].join(',');
 
   const candidates = Array.from(document.querySelectorAll(selector))
@@ -420,23 +440,36 @@ function snapshotConversation() {
     turns.push({ role: item.role, text: item.text });
   }
 
-  if (turns.length > 0) return turns;
-
-  // 兜底：Claude DOM 改版时，至少把主内容区可见正文带过去，避免误判“页面无对话”。
-  const main = document.querySelector('main, [role="main"]') || document.body;
-  const fallbackText = normalizeText(main?.innerText || '');
-  if (!fallbackText) return [];
-
   const noisyLines = new Set([
     'Claude', 'New chat', 'Search', 'Chats', 'Projects', 'Artifacts', 'Code',
     'Customize', 'Recents', 'Share', 'Upgrade', 'Free plan', 'Write a message...'
   ]);
-  const text = fallbackText
+
+  const cleanFallbackText = (text) => normalizeText(text)
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line && !noisyLines.has(line))
     .join('\n');
 
+  const main = document.querySelector('main, [role="main"]') || document.body;
+  let fallbackText = cleanFallbackText(main?.innerText || '');
+
+  if (turns.length > 0) {
+    const hasClaude = turns.some((turn) => turn.role === 'Claude');
+    if (!hasClaude && fallbackText) {
+      for (const turn of turns) {
+        fallbackText = normalizeText(fallbackText.replace(turn.text, ''));
+      }
+      if (fallbackText.length > 30) {
+        turns.push({ role: 'Claude', text: fallbackText });
+      }
+    }
+    return turns;
+  }
+
+  // 兜底：Claude DOM 改版时，至少把主内容区可见正文带过去，避免误判“页面无对话”。
+  if (!fallbackText) return [];
+  const text = fallbackText;
   return text ? [{ role: 'Claude', text }] : [];
 }
 

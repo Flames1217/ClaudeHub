@@ -1,28 +1,15 @@
 # ClaudeHub
 
-ClaudeHub 是一个 Claude 多账号聚合工具，包含 Electron 桌面端和 Chrome / Edge 浏览器扩展。它把多个 `claude.ai` 账号作为本地账号池，支持统一会话、账号导入、额度状态查看、账号路由和快速切换。
+ClaudeHub 是一款用于 `claude.ai` 的 Chrome / Edge 浏览器插件，专注于多账号管理、无缝切换和对话续接。它会在本地保存账号会话信息，切换账号时自动恢复相关 Cookie，并可在切换前抓取当前对话上下文，让新账号继续接着回答。
 
-本项目从早期浏览器扩展演进而来，当前仓库同时保留桌面端与扩展源码。
+## 核心功能
 
-## 当前状态
-
-桌面端已经具备 MVP 能力：
-
-- 统一聊天界面：对话历史保存在本地应用数据目录，不依赖 Claude 官方 conversation id。
-- 多账号导入：支持导入现有 `claude_accounts*.json` 账号备份。
-- 账号池路由：按禁用状态、登录态、冷却状态、已知用量和最近使用时间选择账号。
-- 跨账号续聊：自动生成 handoff prompt，将摘要和最近消息交给接力账号。
-- 独立账号窗口：每个账号使用独立 Electron session partition，减少 Cookie 串号。
-- 账号刷新：可刷新账号基础信息和用量快照，并记录刷新错误。
-- 安全默认值：默认只展示路由和续聊提示预览，真实 Claude Web 自动发送需要显式开启。
-
-浏览器扩展提供轻量账号管理能力：
-
-- 多账号本地管理，数据存储在 `chrome.storage.local`。
-- 通过恢复 `sessionKey` 与相关 Cookie 快速切换账号。
-- 弹窗内查看账号、套餐、状态并一键切换。
-- 管理面板支持添加、删除、导入、导出和调试。
-- 基于接口与页面信息展示用量、限流和冷却状态。
+- 多账号本地管理：账号数据保存在 `chrome.storage.local`。
+- 无缝账号切换：恢复 `sessionKey` 与相关 Cookie 后跳转到 Claude 新对话页。
+- 对话续接：切换前快照当前 Claude 对话，切换后自动注入续接提示。
+- 弹窗快速操作：查看账号、套餐、状态，并支持一键切换或续接。
+- 管理面板：支持添加、删除、导入、导出、刷新账号和调试接口。
+- 用量状态查看：基于接口与页面信息展示用量、限流和冷却状态。
 
 ## 截图预览
 
@@ -35,74 +22,51 @@ ClaudeHub 是一个 Claude 多账号聚合工具，包含 Electron 桌面端和 
   <img src="images/90.png" width="48%"/>
 </p>
 
-## 下载与运行
-
-Release 会提供两种 Windows 版本：
-
-- `ClaudeHub-0.3.4-portable.exe`：便携版，下载后直接运行。
-- `ClaudeHub Setup 0.3.4.exe`：安装版，支持桌面快捷方式和开始菜单。
-
-本地开发运行：
-
-```powershell
-npm install
-npm run desktop
-```
-
-打包：
-
-```powershell
-npm run dist
-```
-
-构建产物会输出到 `release/`。
-
-## Web 自动执行
-
-默认模式不会自动操作 Claude 页面，只会展示路由结果和续聊提示预览。这是为了避免在页面选择器未校准、Cloudflare 校验未通过或登录态异常时误操作。
-
-如需尝试真实 Claude Web 自动执行：
-
-```powershell
-$env:CLAUDEHUB_ENABLE_WEB_AUTOMATION='1'
-npm run desktop
-```
-
-调试开关：
-
-- `$env:CLAUDEHUB_SHOW_AUTOMATION='0'`：隐藏自动执行窗口。
-- `$env:CLAUDEHUB_KEEP_WINDOWS='1'`：保留自动执行窗口，便于排查登录、Cloudflare 或选择器问题。
-
-## 浏览器扩展安装
+## 安装方式
 
 1. 打开 `chrome://extensions` 或 `edge://extensions`。
 2. 启用“开发者模式”。
 3. 点击“加载已解压的扩展程序”。
 4. 选择本项目目录。
 
+## 使用方式
+
+1. 先在浏览器中登录一个 Claude 账号。
+2. 打开 ClaudeHub 弹窗或管理面板，添加当前账号。
+3. 重复登录和添加流程，将多个账号保存到本地账号池。
+4. 在弹窗中点击“切换”可直接切到目标账号。
+5. 在已有对话页面点击“续接”，插件会先保存当前上下文，再切换账号并注入续接提示。
+
 ## 项目结构
 
-- `desktop/`：Electron 桌面端。
-- `desktop/ARCHITECTURE.md`：桌面端架构说明。
-- `manifest.json`：MV3 扩展配置。
-- `background.js`：账号存储、Cookie 切换和消息路由。
-- `content.js`：页面内请求代理与会话信息采集。
-- `popup.html` / `popup.js`：扩展弹窗界面。
-- `dashboard.html` / `dashboard.js`：完整管理面板。
-- `icons/` / `images/`：图标和扩展截图素材。
+- `manifest.json`：Manifest V3 插件配置。
+- `background.js`：后台逻辑，负责账号存储、Cookie 切换、消息路由和自动刷新。
+- `content.js`：运行在 `claude.ai` 页面内，负责接口代理、对话快照和续接注入。
+- `popup.html` / `popup.js`：插件弹窗，用于快速切换和续接。
+- `dashboard.html` / `dashboard.js`：完整账号管理面板。
+- `icons/`：插件图标。
+- `images/`：README 截图素材。
+- `claude_accounts.sample.json`：账号数据示例。
 
-## 开发检查
+## 本地开发
+
+本项目无需构建步骤，修改源码后在浏览器扩展页面重新加载即可。
+
+可使用以下命令进行快速语法检查：
 
 ```powershell
-npm run check
+node --check background.js
+node --check content.js
+node --check popup.js
+node --check dashboard.js
 ```
 
 ## 安全说明
 
-- `claude_accounts*.json` 含有敏感会话数据，请私密保存。
-- 不要把真实账号备份提交到 Git。
-- 打包配置已显式排除 `claude_accounts*.json`、`*.local.json`、`*.tmp` 和 `*.bak`。
-- 本项目为独立工具，与 Anthropic 无官方关联，也未获得其背书。
+- 账号导出的 JSON 文件包含敏感会话数据，请私密保存。
+- 不要把真实账号备份文件提交到 Git。
+- 仓库默认忽略 `claude_accounts*.json`，仅保留 `claude_accounts.sample.json` 作为可共享示例。
+- ClaudeHub 是独立工具，与 Anthropic 无官方关联，也未获得其背书。
 
 ## 许可证
 

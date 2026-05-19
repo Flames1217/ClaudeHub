@@ -372,17 +372,72 @@ if (!_orphaned) {
  * 返回 [{role:'User'|'Claude', text:string}]
  */
 function snapshotConversation() {
+  const normalizeText = (text) => (text || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  const getRole = (el) => {
+    const role = (el.getAttribute('data-message-author-role') || '').toLowerCase();
+    const testId = (el.getAttribute('data-testid') || '').toLowerCase();
+    const cls = String(el.className || '').toLowerCase();
+    if (role.includes('user') || testId.includes('user') || testId.includes('human')) return 'User';
+    if (role.includes('assistant') || testId.includes('assistant') || testId.includes('ai-turn') || cls.includes('font-claude-message')) return 'Claude';
+    return null;
+  };
+
+  const selector = [
+    '[data-message-author-role]',
+    '[data-testid="user-message"]',
+    '[data-testid="human-turn"]',
+    '[data-testid="assistant-message"]',
+    '[data-testid="ai-turn"]',
+    '.font-claude-message'
+  ].join(',');
+
+  const candidates = Array.from(document.querySelectorAll(selector))
+    .map((node) => ({ node, role: getRole(node), text: normalizeText(node.innerText || node.textContent || '') }))
+    .filter((item) => item.role && item.text.length > 0)
+    // Claude 的 turn wrapper 和正文节点可能同时命中，优先保留更内层的正文节点。
+    .filter((item, _index, all) => !all.some((other) =>
+      other !== item &&
+      other.role === item.role &&
+      item.node.contains(other.node) &&
+      normalizeText(other.text).length > 0
+    ))
+    .sort((a, b) => {
+      const pos = a.node.compareDocumentPosition(b.node);
+      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+      return 0;
+    });
+
   const turns = [];
-  // claude.ai 的消息容器 selector（两种兼容）
-  const nodes = document.querySelectorAll(
-    '[data-testid="human-turn"], [data-testid="ai-turn"]'
-  );
-  nodes.forEach(el => {
-    const isHuman = el.getAttribute('data-testid') === 'human-turn';
-    const text = (el.innerText || '').trim();
-    if (text) turns.push({ role: isHuman ? 'User' : 'Claude', text });
-  });
-  return turns;
+  for (const item of candidates) {
+    const prev = turns[turns.length - 1];
+    if (prev && prev.role === item.role && prev.text === item.text) continue;
+    turns.push({ role: item.role, text: item.text });
+  }
+
+  if (turns.length > 0) return turns;
+
+  // 兜底：Claude DOM 改版时，至少把主内容区可见正文带过去，避免误判“页面无对话”。
+  const main = document.querySelector('main, [role="main"]') || document.body;
+  const fallbackText = normalizeText(main?.innerText || '');
+  if (!fallbackText) return [];
+
+  const noisyLines = new Set([
+    'Claude', 'New chat', 'Search', 'Chats', 'Projects', 'Artifacts', 'Code',
+    'Customize', 'Recents', 'Share', 'Upgrade', 'Free plan', 'Write a message...'
+  ]);
+  const text = fallbackText
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !noisyLines.has(line))
+    .join('\n');
+
+  return text ? [{ role: 'Claude', text }] : [];
 }
 
 /**
@@ -391,15 +446,18 @@ function snapshotConversation() {
  */
 function injectToEditor(text) {
   const editor = document.querySelector(
-    '.ProseMirror[contenteditable="true"], [contenteditable="true"][data-placeholder]'
+    '.ProseMirror[contenteditable="true"], [contenteditable="true"][data-placeholder], [contenteditable="true"], textarea'
   );
   if (!editor) return false;
   editor.focus();
-  // 清空并插入文本
+  if (editor.tagName === 'TEXTAREA') {
+    editor.value = text;
+    editor.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }));
+    return true;
+  }
   document.execCommand('selectAll', false, null);
   document.execCommand('insertText', false, text);
-  // 触发 React/ProseMirror 的 input 事件
-  editor.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true }));
+  editor.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }));
   return true;
 }
 

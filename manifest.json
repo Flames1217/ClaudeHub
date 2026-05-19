@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ClaudeHub",
-  "version": "9.0.0",
+  "version": "9.0.1",
   "description": "Claude 多账号管理、快速切换与用量状态查看，支持 Edge/Chrome",
   "permissions": [
     "cookies",

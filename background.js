@@ -680,15 +680,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
           // 1. 向当前 claude.ai 标签发送快照请求
           let turns = [];
+          let images = [];
           try {
             const claudeTab = await getClaudeTab(snapshotTabId || null);
             if (claudeTab) {
               const snapResult = await withTimeout(
                 chrome.tabs.sendMessage(claudeTab.id, { type: 'SNAPSHOT_CONVERSATION' }),
-                5000
+                12000
               ).catch(() => null);
               if (snapResult?.ok && snapResult.turns?.length > 0) {
                 turns = snapResult.turns;
+              }
+              if (snapResult?.ok && Array.isArray(snapResult.images)) {
+                images = snapResult.images;
               }
             }
           } catch (e) {
@@ -696,19 +700,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           }
 
           // 2. 把快照写入 storage（新页面加载后由 content.js 读取并注入）
-          if (turns.length > 0) {
-            await chrome.storage.local.set({
-              pendingContext: {
-                turns,
-                targetKey: swAcc.sessionKey,
-                savedAt: Date.now()
-              }
-            });
+          if (turns.length > 0 || images.length > 0) {
+            const pendingContext = {
+              turns,
+              images,
+              targetKey: swAcc.sessionKey,
+              savedAt: Date.now()
+            };
+            try {
+              await chrome.storage.local.set({ pendingContext });
+            } catch (e) {
+              console.warn('[ClaudeHub] pending context with images too large, retry text only:', e.message);
+              await chrome.storage.local.set({ pendingContext: { ...pendingContext, images: [] } });
+              images = [];
+            }
           }
 
           // 3. 正常切号
           const switchOk = await switchToAccount(swAcc);
-          sendResponse({ success: switchOk, snapshotCount: turns.length });
+          sendResponse({ success: switchOk, snapshotCount: turns.length, imageCount: images.length });
           break;
         }
 

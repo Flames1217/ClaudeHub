@@ -371,7 +371,91 @@ if (!_orphaned) {
  * 抓取当前页面的对话历史
  * 返回 [{role:'User'|'Claude', text:string}]
  */
-function snapshotConversation() {
+const SNAPSHOT_IMAGE_LIMIT = 4;
+const SNAPSHOT_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+const SNAPSHOT_IMAGE_MAX_TOTAL_BYTES = 6 * 1024 * 1024;
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function estimateDataUrlBytes(dataUrl) {
+  const base64 = String(dataUrl || '').split(',')[1] || '';
+  return Math.floor(base64.length * 0.75);
+}
+
+function imageNameFromSrc(src, index, type) {
+  try {
+    const url = new URL(src, location.href);
+    const last = decodeURIComponent(url.pathname.split('/').filter(Boolean).pop() || '');
+    if (last && /\.[a-z0-9]{2,5}$/i.test(last)) return last.slice(0, 80);
+  } catch {}
+  const ext = (type || '').split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+  return `claude-context-image-${index}.${ext}`;
+}
+
+async function collectSnapshotImages(root) {
+  if (!root) return [];
+  const images = [];
+  const seen = new Set();
+  let totalBytes = 0;
+  const nodes = Array.from(root.querySelectorAll('img, picture img'));
+
+  for (const img of nodes) {
+    if (images.length >= SNAPSHOT_IMAGE_LIMIT) break;
+    const src = img.currentSrc || img.src || img.getAttribute('src') || '';
+    if (!src || seen.has(src)) continue;
+    seen.add(src);
+
+    const width = img.naturalWidth || img.width || 0;
+    const height = img.naturalHeight || img.height || 0;
+    if (width < 80 || height < 80) continue;
+    if (/avatar|icon|logo|emoji/i.test(img.alt || src)) continue;
+
+    try {
+      let dataUrl = '';
+      let type = 'image/png';
+      let bytes = 0;
+
+      if (src.startsWith('data:image/')) {
+        dataUrl = src;
+        const match = /^data:([^;]+)/.exec(src);
+        type = match?.[1] || type;
+        bytes = estimateDataUrlBytes(dataUrl);
+      } else {
+        const response = await fetch(src, { credentials: 'include' });
+        if (!response.ok) continue;
+        const blob = await response.blob();
+        if (!blob.type.startsWith('image/')) continue;
+        type = blob.type;
+        bytes = blob.size;
+        if (bytes > SNAPSHOT_IMAGE_MAX_BYTES) continue;
+        dataUrl = await blobToDataUrl(blob);
+      }
+
+      if (!dataUrl || bytes > SNAPSHOT_IMAGE_MAX_BYTES || totalBytes + bytes > SNAPSHOT_IMAGE_MAX_TOTAL_BYTES) continue;
+      totalBytes += bytes;
+      images.push({
+        name: imageNameFromSrc(src, images.length + 1, type),
+        type,
+        dataUrl,
+        bytes,
+        width,
+        height,
+        alt: (img.alt || '').trim()
+      });
+    } catch {}
+  }
+
+  return images;
+}
+
+async function snapshotConversation() {
   const normalizeText = (text) => (text || '')
     .replace(/\u00a0/g, ' ')
     .replace(/[ \t]+\n/g, '\n')
@@ -512,13 +596,14 @@ function snapshotConversation() {
         turns.push({ role: 'Claude', text: fallbackText });
       }
     }
-    return turns;
+    return { turns, images: await collectSnapshotImages(main) };
   }
 
   // 兜底：Claude DOM 改版时，至少把主内容区可见正文带过去，避免误判“页面无对话”。
-  if (!fallbackText) return [];
+  if (!fallbackText) return { turns: [], images: await collectSnapshotImages(main) };
   const text = fallbackText;
-  return text ? [{ role: 'Claude', text }] : [];
+  const fallbackTurns = text ? [{ role: 'Claude', text }] : [];
+  return { turns: fallbackTurns, images: await collectSnapshotImages(main) };
 }
 
 /**
@@ -542,11 +627,52 @@ function injectToEditor(text) {
   return true;
 }
 
+function dataUrlToFile(image, index) {
+  const [header, base64] = String(image.dataUrl || '').split(',');
+  const type = image.type || header?.match(/^data:([^;]+)/)?.[1] || 'image/png';
+  const binary = atob(base64 || '');
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], image.name || `claude-context-image-${index + 1}.png`, { type });
+}
+
+function attachImagesToEditor(images) {
+  if (!Array.isArray(images) || images.length === 0) return false;
+  const editor = document.querySelector(
+    '.ProseMirror[contenteditable="true"], [contenteditable="true"][data-placeholder], [contenteditable="true"], textarea'
+  );
+  if (!editor) return false;
+
+  try {
+    const dt = new DataTransfer();
+    images.forEach((image, index) => {
+      if (image?.dataUrl?.startsWith('data:image/')) dt.items.add(dataUrlToFile(image, index));
+    });
+    if (!dt.files.length) return false;
+
+    editor.focus();
+    const pasted = editor.dispatchEvent(new ClipboardEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: dt
+    }));
+    editor.dispatchEvent(new DragEvent('drop', {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer: dt
+    }));
+    return pasted !== false;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * 把对话历史数组格式化为续接 prompt 字符串
  */
-function buildContinuePrompt(turns) {
-  if (!turns || turns.length === 0) return '';
+function buildContinuePrompt(turns, images = []) {
+  const safeTurns = Array.isArray(turns) ? turns : [];
+  if (safeTurns.length === 0 && (!Array.isArray(images) || images.length === 0)) return '';
 
   const normalizeText = (text) => (text || '')
     .replace(/\u00a0/g, ' ')
@@ -555,7 +681,7 @@ function buildContinuePrompt(turns) {
 
   const ASSISTANT_MAX = 1200;
   const USER_MAX = 1800;
-  const lines = turns.map((t, i) => {
+  const lines = safeTurns.map((t, i) => {
     const isLast = i === turns.length - 1;
     const role = t.role === 'Claude' ? 'Assistant' : 'User';
     const limit = role === 'Assistant' ? ASSISTANT_MAX : USER_MAX;
@@ -566,7 +692,19 @@ function buildContinuePrompt(turns) {
     return `### ${i + 1}. ${role}\n\n${text}`;
   });
 
-  const lastUser = [...turns].reverse().find((turn) => turn.role === 'User');
+  const lastUser = [...safeTurns].reverse().find((turn) => turn.role === 'User');
+  const imageSection = Array.isArray(images) && images.length > 0
+    ? (
+      '## 附带图片\n\n' +
+      images.map((image, index) => {
+        const sizeKb = image.bytes ? `${Math.round(image.bytes / 1024)}KB` : '未知大小';
+        const dims = image.width && image.height ? `${image.width}x${image.height}` : '未知尺寸';
+        const alt = image.alt ? `，说明：${image.alt}` : '';
+        return `- 图片 ${index + 1}: ${image.name || `image-${index + 1}`}（${dims}，${sizeKb}${alt}）`;
+      }).join('\n') +
+      '\n\n> 插件会尝试把这些图片作为附件一并粘贴到当前对话。如果你看不到图片附件，请提醒用户重新上传对应图片。\n\n'
+    )
+    : '';
 
   return (
     '# 续接任务\n\n' +
@@ -577,11 +715,13 @@ function buildContinuePrompt(turns) {
     '- 如果上一个 Assistant 已经给出方案，请在其基础上补充、修正或继续展开。\n' +
     '- 输出使用结构化 Markdown，标题、列表、表格或步骤要清晰。\n' +
     '- 忽略上下文中可能混入的导航栏、按钮、模型名、快捷键、账号信息等界面噪音。\n' +
+    '- 如果存在“附带图片”，请结合图片附件和图片清单理解上下文。\n' +
     '- 如果上下文不足，请明确说明缺口，并给出下一步需要确认的信息。\n\n' +
+    imageSection +
     '## 对话上下文\n\n' +
-    lines.join('\n\n---\n\n') +
+    (lines.length ? lines.join('\n\n---\n\n') : '> 上一轮上下文主要由图片组成，请结合“附带图片”继续。') +
     '\n\n## 当前需要回答的问题\n\n' +
-    (lastUser ? normalizeText(lastUser.text) : '请继续回答最后一条 User 消息。') +
+    (lastUser ? normalizeText(lastUser.text) : '请结合附带图片继续回答用户上一轮问题。') +
     '\n\n## 输出\n\n'
   );
 }
@@ -594,21 +734,19 @@ try {
 
     // 1. 快照请求：抓取对话历史并返回
     if (msg.type === 'SNAPSHOT_CONVERSATION') {
-      try {
-        const turns = snapshotConversation();
-        sendResponse({ ok: true, turns, url: window.location.href });
-      } catch (e) {
-        sendResponse({ ok: false, error: e.message });
-      }
-      return false; // 同步返回
+      snapshotConversation()
+        .then((snapshot) => sendResponse({ ok: true, ...snapshot, url: window.location.href }))
+        .catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
     }
 
     // 2. 注入请求：将续接 prompt 写入输入框
     if (msg.type === 'INJECT_CONTEXT') {
       try {
-        const prompt = buildContinuePrompt(msg.turns);
+        const prompt = buildContinuePrompt(msg.turns, msg.images || []);
         const ok = prompt ? injectToEditor(prompt) : false;
-        sendResponse({ ok });
+        const attached = ok ? attachImagesToEditor(msg.images || []) : false;
+        sendResponse({ ok, attached });
       } catch (e) {
         sendResponse({ ok: false, error: e.message });
       }
@@ -633,16 +771,17 @@ function tryAutoInjectContext() {
 
   chrome.storage.local.get('pendingContext', (result) => {
     if (!result.pendingContext) return;
-    const { turns, targetKey } = result.pendingContext;
-    if (!turns || turns.length === 0) { chrome.storage.local.remove('pendingContext'); return; }
+    const { turns, targetKey, images = [] } = result.pendingContext;
+    if ((!turns || turns.length === 0) && (!images || images.length === 0)) { chrome.storage.local.remove('pendingContext'); return; }
 
     // 等待编辑器渲染完成，最多重试 8 次（每次 500ms）
     let attempts = 0;
     const tryInject = () => {
       attempts++;
-      const prompt = buildContinuePrompt(turns);
+      const prompt = buildContinuePrompt(turns, images);
       const ok = injectToEditor(prompt);
       if (ok) {
+        setTimeout(() => attachImagesToEditor(images), 250);
         chrome.storage.local.remove('pendingContext');
         // 可选：显示提示
         try {

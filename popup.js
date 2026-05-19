@@ -254,8 +254,9 @@ async function doContinueSwitch(key) {
 
   if (r?.success) {
     const snapped = r.snapshotCount > 0;
+    const imageText = r.imageCount > 0 ? `，含 ${r.imageCount} 张图片` : '';
     toast(snapped
-      ? `✓ 切换成功，已保存 ${r.snapshotCount} 条对话，新页面将自动续接`
+      ? `✓ 切换成功，已保存 ${r.snapshotCount} 条对话${imageText}，新页面将自动续接`
       : '✓ 切换成功（页面无对话，未续接）', 4000);
   } else {
     toast('切换失败，请重试');

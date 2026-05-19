@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('cockpit', {
+contextBridge.exposeInMainWorld('claudeHub', {
   getState: () => ipcRenderer.invoke('app:get-state'),
   newConversation: () => ipcRenderer.invoke('app:new-conversation'),
   setActiveConversation: (conversationId) => ipcRenderer.invoke('app:set-active-conversation', conversationId),

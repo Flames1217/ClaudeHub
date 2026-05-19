@@ -55,7 +55,7 @@ function renderConversations() {
 
   list.querySelectorAll('.conversation-item').forEach((item) => {
     item.addEventListener('click', async () => {
-      state = await window.cockpit.setActiveConversation(item.dataset.conversationId);
+      state = await window.claudeHub.setActiveConversation(item.dataset.conversationId);
       render();
     });
   });
@@ -99,17 +99,17 @@ function renderAccounts() {
   `).join('');
 
   list.querySelectorAll('.open-account-btn').forEach((button) => {
-    button.addEventListener('click', () => window.cockpit.openAccount(button.dataset.accountId));
+    button.addEventListener('click', () => window.claudeHub.openAccount(button.dataset.accountId));
   });
 
   list.querySelectorAll('.link-btn').forEach((button) => {
     button.addEventListener('click', async () => {
       const accountId = button.dataset.accountId;
       if (button.dataset.action === 'current') {
-        state = await window.cockpit.setCurrentAccount(accountId);
+        state = await window.claudeHub.setCurrentAccount(accountId);
       } else if (button.dataset.action === 'toggle') {
         const account = state.accounts.find((item) => item.id === accountId);
-        state = await window.cockpit.updateAccount(accountId, {
+        state = await window.claudeHub.updateAccount(accountId, {
           disabled: !account.disabled,
           disabledReason: account.disabled ? '' : '手动禁用',
           disabledAt: account.disabled ? null : Date.now()
@@ -169,9 +169,9 @@ function escapeHtml(value) {
 }
 
 async function refresh() {
-  state = await window.cockpit.getState();
+  state = await window.claudeHub.getState();
   if (!state.activeConversationId && state.conversations[0]) {
-    state = await window.cockpit.setActiveConversation(state.conversations[0].id);
+    state = await window.claudeHub.setActiveConversation(state.conversations[0].id);
   }
   render();
 }
@@ -187,10 +187,10 @@ async function sendMessage() {
   try {
     let conversation = activeConversation();
     if (!conversation) {
-      state = await window.cockpit.newConversation();
+      state = await window.claudeHub.newConversation();
       conversation = activeConversation();
     }
-    state = await window.cockpit.sendMessage({
+    state = await window.claudeHub.sendMessage({
       conversationId: conversation.id,
       accountId: $('#accountSelect').value || null,
       content: text
@@ -265,7 +265,7 @@ async function checkUpdate() {
   $('#updateProgressWrap').classList.add('hidden');
   $('#releaseNotes').textContent = '';
   try {
-    const result = await window.cockpit.checkUpdate();
+    const result = await window.claudeHub.checkUpdate();
     if (result.status === 'dev') {
       setUpdateStatus(result.message);
     } else if (result.updateInfo) {
@@ -280,7 +280,7 @@ async function checkUpdate() {
 
 function wireEvents() {
   $('#newConversationBtn').addEventListener('click', async () => {
-    state = await window.cockpit.newConversation();
+    state = await window.claudeHub.newConversation();
     render();
     $('#messageInput').focus();
   });
@@ -301,9 +301,9 @@ function wireEvents() {
     });
   });
 
-  $('#chooseImportFilesBtn').addEventListener('click', () => runImport(() => window.cockpit.importAccounts()));
-  $('#pasteImportBtn').addEventListener('click', () => runImport(() => window.cockpit.importAccountsFromText($('#importText').value)));
-  $('#importCurrentStoreBtn').addEventListener('click', () => runImport(() => window.cockpit.importCurrentStore()));
+  $('#chooseImportFilesBtn').addEventListener('click', () => runImport(() => window.claudeHub.importAccounts()));
+  $('#pasteImportBtn').addEventListener('click', () => runImport(() => window.claudeHub.importAccountsFromText($('#importText').value)));
+  $('#importCurrentStoreBtn').addEventListener('click', () => runImport(() => window.claudeHub.importCurrentStore()));
   $('#pasteExampleBtn').addEventListener('click', () => {
     $('#importText').value = JSON.stringify([{ email: 'name@example.com', sessionKey: 'sk-ant-sid01-your-session-key' }], null, 2);
   });
@@ -311,14 +311,14 @@ function wireEvents() {
   $('#refreshAccountsBtn').addEventListener('click', async () => {
     $('#refreshAccountsBtn').disabled = true;
     try {
-      state = await window.cockpit.refreshAccounts();
+      state = await window.claudeHub.refreshAccounts();
       render();
     } finally {
       $('#refreshAccountsBtn').disabled = false;
     }
   });
 
-  $('#openStoreBtn').addEventListener('click', () => window.cockpit.openStoreFile());
+  $('#openStoreBtn').addEventListener('click', () => window.claudeHub.openStoreFile());
   $('#sendBtn').addEventListener('click', sendMessage);
   $('#messageInput').addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
@@ -338,15 +338,15 @@ function wireEvents() {
     setUpdateStatus(`正在下载 ${latestUpdateInfo?.version || '新版本'}...`);
     $('#downloadUpdateBtn').disabled = true;
     try {
-      await window.cockpit.downloadUpdate();
+      await window.claudeHub.downloadUpdate();
     } catch (error) {
       setUpdateStatus(error.message || String(error));
       $('#downloadUpdateBtn').disabled = false;
     }
   });
-  $('#restartUpdateBtn').addEventListener('click', () => window.cockpit.installUpdate());
+  $('#restartUpdateBtn').addEventListener('click', () => window.claudeHub.installUpdate());
 
-  window.cockpit.onUpdateEvent((payload) => {
+  window.claudeHub.onUpdateEvent((payload) => {
     if (payload.type === 'checking') setUpdateStatus('正在检查 GitHub Releases...');
     if (payload.type === 'available') renderUpdateInfo(payload.info);
     if (payload.type === 'not-available') setUpdateStatus('当前已经是最新版本。');

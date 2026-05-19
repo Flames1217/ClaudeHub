@@ -22,12 +22,14 @@ function createId(prefix) {
 }
 
 function createStore(userDataPath) {
-  const filePath = path.join(userDataPath, 'cockpit-store.json');
+  const filePath = path.join(userDataPath, 'claudehub-store.json');
+  const legacyFilePath = path.join(userDataPath, 'cockpit-store.json');
 
   function read() {
     try {
-      if (!fs.existsSync(filePath)) return structuredClone(EMPTY_STATE);
-      const raw = fs.readFileSync(filePath, 'utf8');
+      const sourcePath = fs.existsSync(filePath) ? filePath : legacyFilePath;
+      if (!fs.existsSync(sourcePath)) return structuredClone(EMPTY_STATE);
+      const raw = fs.readFileSync(sourcePath, 'utf8');
       const parsed = JSON.parse(raw);
       const base = structuredClone(EMPTY_STATE);
       return {

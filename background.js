@@ -1,4 +1,4 @@
-// background.js v10 - Claude Switcher
+// background.js v10 - ClaudeHub
 // 核心修复：切号跳登录页问题
 
 const FETCH_TIMEOUT_MS = 12000;
@@ -320,7 +320,7 @@ async function switchToAccount(account) {
   try {
     // Bug3修复：防御性校验，避免用空/无效key覆盖cookie
     if (!account?.sessionKey || !account.sessionKey.startsWith('sk-ant-')) {
-      console.error('[Switcher] invalid sessionKey, abort switch');
+      console.error('[ClaudeHub] invalid sessionKey, abort switch');
       return false;
     }
 
@@ -406,7 +406,7 @@ async function switchToAccount(account) {
 
     return true;
   } catch (e) {
-    console.error('[Switcher] switch error:', e);
+    console.error('[ClaudeHub] switch error:', e);
     return false;
   }
 }
@@ -430,7 +430,7 @@ async function refreshOneAccount(targetAccount, currentKey, tab) {
       refreshedAt: Date.now()
     };
   } catch (e) {
-    console.error('[Switcher] refreshOne error:', e);
+    console.error('[ClaudeHub] refreshOne error:', e);
     return null;
   } finally {
     if (orig) {
@@ -673,10 +673,49 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         }
 
+        // ── 续接对话：快照当前对话 → 切号 → 新页面加载后自动注入 ──
+        case 'SNAPSHOT_AND_SWITCH': {
+          const { account: swAcc, tabId: snapshotTabId } = msg;
+          if (!swAcc) { sendResponse({ success: false, error: 'no_account' }); break; }
+
+          // 1. 向当前 claude.ai 标签发送快照请求
+          let turns = [];
+          try {
+            const claudeTab = await getClaudeTab(snapshotTabId || null);
+            if (claudeTab) {
+              const snapResult = await withTimeout(
+                chrome.tabs.sendMessage(claudeTab.id, { type: 'SNAPSHOT_CONVERSATION' }),
+                5000
+              ).catch(() => null);
+              if (snapResult?.ok && snapResult.turns?.length > 0) {
+                turns = snapResult.turns;
+              }
+            }
+          } catch (e) {
+            console.warn('[ClaudeHub] snapshot failed, switching anyway:', e.message);
+          }
+
+          // 2. 把快照写入 storage（新页面加载后由 content.js 读取并注入）
+          if (turns.length > 0) {
+            await chrome.storage.local.set({
+              pendingContext: {
+                turns,
+                targetKey: swAcc.sessionKey,
+                savedAt: Date.now()
+              }
+            });
+          }
+
+          // 3. 正常切号
+          const switchOk = await switchToAccount(swAcc);
+          sendResponse({ success: switchOk, snapshotCount: turns.length });
+          break;
+        }
+
         default: sendResponse({ error: 'unknown_type' });
       }
     } catch (e) {
-      console.error('[Claude Switcher BG]', e);
+      console.error('[ClaudeHub BG]', e);
       sendResponse({ error: e.message });
     }
   })();
@@ -707,7 +746,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       }
     }
     await saveAccounts(accounts);
-  } catch (e) { console.error('[Switcher] alarm error', e); }
+  } catch (e) { console.error('[ClaudeHub] alarm error', e); }
 });
 
 

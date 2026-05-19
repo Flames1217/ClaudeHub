@@ -1,7 +1,7 @@
 {
-  "name": "claude-cockpit",
+  "name": "claudehub",
   "version": "0.3.4",
-  "description": "Claude 多账号聚合桌面聊天 cockpit。",
+  "description": "Claude 多账号聚合桌面端与浏览器扩展。",
   "main": "desktop/main.js",
   "scripts": {
     "desktop": "electron .",
@@ -15,13 +15,13 @@
     "electron",
     "account-switcher",
     "multi-account",
-    "cockpit"
+    "hub"
   ],
   "author": "",
   "license": "MIT",
   "build": {
-    "appId": "com.viper373.claude-cockpit",
-    "productName": "Claude Cockpit",
+    "appId": "com.viper373.claudehub",
+    "productName": "ClaudeHub",
     "directories": {
       "output": "release"
     },
@@ -41,7 +41,7 @@
       {
         "provider": "github",
         "owner": "Flames1217",
-        "repo": "claude-cockpit"
+        "repo": "ClaudeHub"
       }
     ],
     "win": {
@@ -66,7 +66,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Claude Cockpit"
+      "shortcutName": "ClaudeHub"
     },
     "portable": {
       "artifactName": "${productName}-${version}-portable.${ext}"

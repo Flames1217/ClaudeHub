@@ -1,4 +1,4 @@
-// dashboard.js v10 - Claude Switcher (Fixed)
+// dashboard.js v10 - ClaudeHub (Fixed)
 // 修复：语法错误、sessionBanner检测、addAuto tabId传递、大面板加载死循环
 
 const COLORS = ['#cc785c','#5c8acc','#5cac78','#ac5c8a','#7c5cac','#5c8a8a','#8a5c5c','#ac8a5c','#4a90a4','#7a9e3e'];

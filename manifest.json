@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Claude Switcher",
+  "name": "ClaudeHub",
   "version": "9.0.0",
-  "description": "多账号管理，实时配额监控，支持 Edge/Chrome",
+  "description": "Claude 多账号管理、快速切换与用量状态查看，支持 Edge/Chrome",
   "permissions": [
     "cookies",
     "storage",
@@ -27,8 +27,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://claude.ai/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://claude.ai/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],

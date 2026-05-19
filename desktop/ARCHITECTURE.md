@@ -1,6 +1,6 @@
-# Claude Cockpit Architecture
+# ClaudeHub Architecture
 
-This desktop layer borrows the useful shape of cockpit-tools without copying its provider-specific code:
+This desktop layer borrows the useful shape of multi-account routing tools without copying provider-specific code:
 
 - Account state is platform data, not UI state.
 - Each account can be disabled, refreshed, routed, and opened in an isolated runtime.
@@ -13,13 +13,13 @@ This desktop layer borrows the useful shape of cockpit-tools without copying its
 - `store.js`: atomic JSON store for accounts, conversations, settings, and current account.
 - `account-router.js`: account health checks, cooldown filtering, usage-aware routing, handoff prompt generation.
 - `claude-executor.js`: Claude Web session hydration, quota/account snapshot refresh, optional Web automation.
-- `renderer.js`: cockpit UI for conversations, account pool, routing, and sending messages.
+- `renderer.js`: ClaudeHub UI for conversations, account pool, routing, and sending messages.
 
 ## Execution Modes
 
 Default mode is a safe handoff preview. It routes the message and shows the prompt that would be sent to Claude.
 
-Set `CLAUDE_COCKPIT_ENABLE_WEB_AUTOMATION=1` to try the real Claude Web runner. The runner uses an isolated Electron session partition per account.
+Set `CLAUDEHUB_ENABLE_WEB_AUTOMATION=1` to try the real Claude Web runner. The runner uses an isolated Electron session partition per account.
 
 ## Next Hardening Points
 

@@ -302,8 +302,8 @@ async function automateClaudeWeb(account, prompt) {
   const win = new BrowserWindow({
     width: 1180,
     height: 860,
-    show: process.env.CLAUDE_COCKPIT_SHOW_AUTOMATION !== '0',
-    title: `Claude Cockpit Runner - ${account.email || account.nickname || account.id}`,
+    show: process.env.CLAUDEHUB_SHOW_AUTOMATION !== '0',
+    title: `ClaudeHub Runner - ${account.email || account.nickname || account.id}`,
     webPreferences: {
       partition
     }
@@ -323,7 +323,7 @@ async function automateClaudeWeb(account, prompt) {
     if (!answer) return { ok: false, error: '已发送，但没有成功读取 Claude 回复。' };
     return { ok: true, mode: 'web-automation', content: answer };
   } finally {
-    if (process.env.CLAUDE_COCKPIT_KEEP_WINDOWS !== '1' && !win.isDestroyed()) {
+    if (process.env.CLAUDEHUB_KEEP_WINDOWS !== '1' && !win.isDestroyed()) {
       win.close();
     }
   }
@@ -337,14 +337,14 @@ async function sendWithAccount({ account, prompt }) {
     };
   }
 
-  if (process.env.CLAUDE_COCKPIT_ENABLE_WEB_AUTOMATION !== '1') {
+  if (process.env.CLAUDEHUB_ENABLE_WEB_AUTOMATION !== '1') {
     return {
       ok: true,
       mode: 'handoff-preview',
       content: [
         `已路由到：${account.email || account.nickname || account.name || account.id}`,
         '',
-        '桌面 cockpit 的账号池、会话存储和跨账号续聊提示已经接好。',
+        'ClaudeHub 的账号池、会话存储和跨账号续聊提示已经接好。',
         '真实 Claude Web 自动发送层还处于保护开关后面，避免在没有校准页面选择器前误操作。',
         '',
         '本次会交给 Claude 的续聊提示预览：',

@@ -1,4 +1,4 @@
-// popup.js v10 - Claude Switcher (Fixed)
+// popup.js v10 - ClaudeHub (Fixed)
 // 修复：重复声明、sessionBanner检测位置、addAuto tabId传递、当前账号识别
 
 const COLORS = ['#cc785c','#5c8acc','#5cac78','#ac5c8a','#7c5cac','#5c8a8a','#8a5c5c','#ac8a5c','#4a90a4','#7a9e3e'];
@@ -172,7 +172,8 @@ function render() {
         <div class="cr">
           ${isActive
             ? '<span class="badge b-active">✓ 使用中</span>'
-            : `<button class="btn-sw" data-key="${acc.sessionKey}">切换</button>`
+            : `<button class="btn-sw" data-key="${acc.sessionKey}">切换</button>
+               <button class="btn-cont" data-key="${acc.sessionKey}" title="切换账号并自动续接当前对话">✦ 续接</button>`
           }
           <span class="badge ${planClass(plan)}">${plan}</span>
         </div>
@@ -182,6 +183,9 @@ function render() {
 
   list.querySelectorAll('.btn-sw').forEach(btn =>
     btn.addEventListener('click', e => { e.stopPropagation(); doSwitch(btn.dataset.key); })
+  );
+  list.querySelectorAll('.btn-cont').forEach(btn =>
+    btn.addEventListener('click', e => { e.stopPropagation(); doContinueSwitch(btn.dataset.key); })
   );
   list.querySelectorAll('.card:not(.active)').forEach(card =>
     card.addEventListener('click', () => doSwitch(card.dataset.key))
@@ -225,7 +229,45 @@ async function doSwitch(key) {
   render();
 }
 
-// ── Refresh ──
+// ── 续接对话切号 ──
+async function doContinueSwitch(key) {
+  const acc = accounts.find(a => a.sessionKey === key);
+  if (!acc) return;
+
+  isSwitching = true;
+  const oldKey = currentKey;
+  currentKey = key;
+  render();
+
+  const card = document.querySelector(`[data-key="${key}"]`);
+  if (card) {
+    card.classList.add('switching');
+    const badge = card.querySelector('.b-active');
+    if (badge) badge.innerHTML = '<span class="spin" style="width:10px;height:10px;border-width:2px;margin-right:4px;border-top-color:#1a7a46"></span>续接中';
+  }
+
+  toast('正在保存对话并切换...', 5000);
+
+  // 获取当前标签 ID（用于精确快照）
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const r = await send('SNAPSHOT_AND_SWITCH', { account: acc, tabId: activeTab?.id });
+
+  if (r?.success) {
+    const snapped = r.snapshotCount > 0;
+    toast(snapped
+      ? `✓ 切换成功，已保存 ${r.snapshotCount} 条对话，新页面将自动续接`
+      : '✓ 切换成功（页面无对话，未续接）', 4000);
+  } else {
+    toast('切换失败，请重试');
+  }
+
+  isSwitching = false;
+  const fresh = await send('GET_CURRENT_KEY');
+  if (fresh?.currentSessionKey) currentKey = fresh.currentSessionKey;
+  render();
+}
+
+
 async function doRefresh() {
   if (refreshing) return;
   refreshing = true;

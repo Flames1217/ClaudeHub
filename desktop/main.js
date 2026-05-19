@@ -23,7 +23,7 @@ function createWindow() {
     height: 820,
     minWidth: 980,
     minHeight: 680,
-    title: 'Claude Cockpit',
+    title: 'ClaudeHub',
     icon: path.join(__dirname, '..', 'icons', 'icon256.png'),
     backgroundColor: '#f6f3ee',
     webPreferences: {
@@ -52,10 +52,10 @@ function sendUpdateEvent(type, payload = {}) {
 function createTray() {
   if (tray) return tray;
   tray = new Tray(path.join(__dirname, '..', 'icons', 'icon256.png'));
-  tray.setToolTip('Claude Cockpit');
+  tray.setToolTip('ClaudeHub');
   tray.setContextMenu(Menu.buildFromTemplate([
     {
-      label: '显示 Claude Cockpit',
+      label: '显示 ClaudeHub',
       click: showMainWindow
     },
     { type: 'separator' },
@@ -98,7 +98,7 @@ async function handleMainWindowClose(event) {
   event.preventDefault();
   const result = await dialog.showMessageBox(mainWindow, {
     type: 'question',
-    title: '关闭 Claude Cockpit',
+    title: '关闭 ClaudeHub',
     message: '关闭窗口时要怎么处理？',
     detail: '选择“最小化到托盘”后，应用会继续在右下角托盘运行；可通过托盘图标右键退出。',
     buttons: ['最小化到托盘', '退出应用', '取消'],

@@ -1,4 +1,4 @@
-// content.js - Claude Switcher Pro
+// content.js - ClaudeHub
 // Runs inside claude.ai page. Handles API requests on behalf of background.js
 
 // ── 孤儿检测（仅在扩展真正失效时标记）──
@@ -361,4 +361,149 @@ if (!_orphaned) {
   } catch (e) {
     if (isContextError(e)) killSelf();
   }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── 续接对话：对话快照 & 上下文注入 ──
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * 抓取当前页面的对话历史
+ * 返回 [{role:'User'|'Claude', text:string}]
+ */
+function snapshotConversation() {
+  const turns = [];
+  // claude.ai 的消息容器 selector（两种兼容）
+  const nodes = document.querySelectorAll(
+    '[data-testid="human-turn"], [data-testid="ai-turn"]'
+  );
+  nodes.forEach(el => {
+    const isHuman = el.getAttribute('data-testid') === 'human-turn';
+    const text = (el.innerText || '').trim();
+    if (text) turns.push({ role: isHuman ? 'User' : 'Claude', text });
+  });
+  return turns;
+}
+
+/**
+ * 把续接 prompt 注入到 ProseMirror 编辑器
+ * 使用 execCommand（在 content script 中仍有效）
+ */
+function injectToEditor(text) {
+  const editor = document.querySelector(
+    '.ProseMirror[contenteditable="true"], [contenteditable="true"][data-placeholder]'
+  );
+  if (!editor) return false;
+  editor.focus();
+  // 清空并插入文本
+  document.execCommand('selectAll', false, null);
+  document.execCommand('insertText', false, text);
+  // 触发 React/ProseMirror 的 input 事件
+  editor.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true }));
+  return true;
+}
+
+/**
+ * 把对话历史数组格式化为续接 prompt 字符串
+ */
+function buildContinuePrompt(turns) {
+  if (!turns || turns.length === 0) return '';
+
+  // 中间的 Claude 消息截断到 300 字，避免 prompt 过长
+  const CLAUDE_MAX = 300;
+  const lines = turns.map((t, i) => {
+    const isLast = i === turns.length - 1;
+    let text = t.text;
+    if (t.role === 'Claude' && !isLast && text.length > CLAUDE_MAX) {
+      text = text.slice(0, CLAUDE_MAX) + '…（已截断）';
+    }
+    return `【${t.role}】${text}`;
+  });
+
+  return (
+    '[续接对话]\n' +
+    '以下是我在上一个账号中的对话记录，请继续帮我解决最后一个问题。\n\n' +
+    lines.join('\n\n') +
+    '\n\n---\n请直接接着回答最后的问题，不需要重新介绍背景。'
+  );
+}
+
+// ── 监听来自 background 的消息 ──
+
+try {
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (_orphaned || isContextDead()) return false;
+
+    // 1. 快照请求：抓取对话历史并返回
+    if (msg.type === 'SNAPSHOT_CONVERSATION') {
+      try {
+        const turns = snapshotConversation();
+        sendResponse({ ok: true, turns, url: window.location.href });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+      return false; // 同步返回
+    }
+
+    // 2. 注入请求：将续接 prompt 写入输入框
+    if (msg.type === 'INJECT_CONTEXT') {
+      try {
+        const prompt = buildContinuePrompt(msg.turns);
+        const ok = prompt ? injectToEditor(prompt) : false;
+        sendResponse({ ok });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+      return false;
+    }
+
+    return false;
+  });
+} catch (e) {
+  if (isContextError(e)) killSelf();
+}
+
+// ── 页面加载完成后：检查是否有待注入的续接上下文 ──
+// 切号后新页面加载完成，background.js 会把 pendingContext 写入 storage，
+// content.js 读取到后自动注入并清除，实现"无感续接"。
+
+function tryAutoInjectContext() {
+  if (_orphaned || isContextDead()) return;
+  // 只在 claude.ai 主对话页（非 dashboard/login）执行
+  if (!window.location.href.startsWith('https://claude.ai')) return;
+  if (window.location.href.includes('/login') || window.location.href.includes('dashboard.html')) return;
+
+  chrome.storage.local.get('pendingContext', (result) => {
+    if (!result.pendingContext) return;
+    const { turns, targetKey } = result.pendingContext;
+    if (!turns || turns.length === 0) { chrome.storage.local.remove('pendingContext'); return; }
+
+    // 等待编辑器渲染完成，最多重试 8 次（每次 500ms）
+    let attempts = 0;
+    const tryInject = () => {
+      attempts++;
+      const prompt = buildContinuePrompt(turns);
+      const ok = injectToEditor(prompt);
+      if (ok) {
+        chrome.storage.local.remove('pendingContext');
+        // 可选：显示提示
+        try {
+          safeSend({ type: 'CONTEXT_INJECTED', targetKey });
+        } catch {}
+      } else if (attempts < 8) {
+        setTimeout(tryInject, 500);
+      } else {
+        // 注入失败：把内容存剪贴板作为兜底
+        chrome.storage.local.remove('pendingContext');
+      }
+    };
+    setTimeout(tryInject, 800); // 初始等待页面渲染
+  });
+}
+
+// 页面加载完成时触发
+if (document.readyState === 'complete') {
+  tryAutoInjectContext();
+} else {
+  window.addEventListener('load', tryAutoInjectContext);
 }

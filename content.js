@@ -378,6 +378,65 @@ function snapshotConversation() {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
+  const removeUiText = (text) => normalizeText(text)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !isNoiseLine(line))
+    .join('\n');
+
+  const isNoiseLine = (line) => {
+    const exactNoise = new Set([
+      'Claude', 'New chat', 'Search', 'Chats', 'Projects', 'Artifacts', 'Code',
+      'Customize', 'Recents', 'Share', 'Upgrade', 'Free plan', 'Write a message...',
+      'Sonnet 4.6', 'Adaptive', 'Hide'
+    ]);
+    if (exactNoise.has(line)) return true;
+    return [
+      /^Ctrl[+⇧]/i,
+      /^Claude is AI/i,
+      /^Claude responded:/i,
+      /^You said:/i,
+      /^5月\d+日$/,
+      /^.+账号$/,
+      /^共\s*\d+\s*个账号$/,
+      /^本地存储/,
+      /^管理面板$/,
+      /^切换$/,
+      /^续接$/,
+      /^Free$/i,
+      /^Pro$/i,
+      /^Max$/i,
+      /^Share$/i
+    ].some((pattern) => pattern.test(line));
+  };
+
+  const getReadableText = (root) => {
+    if (!root) return '';
+    const clone = root.cloneNode(true);
+    clone.querySelectorAll([
+      'aside',
+      'nav',
+      'header',
+      'footer',
+      'button',
+      'input',
+      'textarea',
+      'select',
+      '[role="navigation"]',
+      '[role="button"]',
+      '[aria-label]',
+      '[data-testid*="sidebar"]',
+      '[data-testid*="composer"]',
+      '[data-testid*="model"]',
+      '[data-testid*="menu"]',
+      '[class*="sidebar"]',
+      '[class*="composer"]',
+      '[class*="popover"]',
+      '[class*="toast"]'
+    ].join(',')).forEach((node) => node.remove());
+    return removeUiText(clone.innerText || clone.textContent || '');
+  };
+
   const hasClassLike = (el, needle) => {
     const cls = String(el?.className || '').toLowerCase();
     return cls.includes(needle) || !!el?.querySelector?.(`[class*="${needle}"]`);
@@ -417,7 +476,7 @@ function snapshotConversation() {
   ].join(',');
 
   const candidates = Array.from(document.querySelectorAll(selector))
-    .map((node) => ({ node, role: getRole(node), text: normalizeText(node.innerText || node.textContent || '') }))
+    .map((node) => ({ node, role: getRole(node), text: removeUiText(node.innerText || node.textContent || '') }))
     .filter((item) => item.role && item.text.length > 0)
     // Claude 的 turn wrapper 和正文节点可能同时命中，优先保留更内层的正文节点。
     .filter((item, _index, all) => !all.some((other) =>
@@ -440,19 +499,8 @@ function snapshotConversation() {
     turns.push({ role: item.role, text: item.text });
   }
 
-  const noisyLines = new Set([
-    'Claude', 'New chat', 'Search', 'Chats', 'Projects', 'Artifacts', 'Code',
-    'Customize', 'Recents', 'Share', 'Upgrade', 'Free plan', 'Write a message...'
-  ]);
-
-  const cleanFallbackText = (text) => normalizeText(text)
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line && !noisyLines.has(line))
-    .join('\n');
-
-  const main = document.querySelector('main, [role="main"]') || document.body;
-  let fallbackText = cleanFallbackText(main?.innerText || '');
+  const main = document.querySelector('[data-testid*="conversation"], main, [role="main"]') || document.body;
+  let fallbackText = getReadableText(main);
 
   if (turns.length > 0) {
     const hasClaude = turns.some((turn) => turn.role === 'Claude');
@@ -500,22 +548,41 @@ function injectToEditor(text) {
 function buildContinuePrompt(turns) {
   if (!turns || turns.length === 0) return '';
 
-  // 中间的 Claude 消息截断到 300 字，避免 prompt 过长
-  const CLAUDE_MAX = 300;
+  const normalizeText = (text) => (text || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  const ASSISTANT_MAX = 1200;
+  const USER_MAX = 1800;
   const lines = turns.map((t, i) => {
     const isLast = i === turns.length - 1;
-    let text = t.text;
-    if (t.role === 'Claude' && !isLast && text.length > CLAUDE_MAX) {
-      text = text.slice(0, CLAUDE_MAX) + '…（已截断）';
+    const role = t.role === 'Claude' ? 'Assistant' : 'User';
+    const limit = role === 'Assistant' ? ASSISTANT_MAX : USER_MAX;
+    let text = normalizeText(t.text);
+    if (!isLast && text.length > limit) {
+      text = text.slice(0, limit) + '\n\n> [中间消息过长，已截断]';
     }
-    return `【${t.role}】${text}`;
+    return `### ${i + 1}. ${role}\n\n${text}`;
   });
 
+  const lastUser = [...turns].reverse().find((turn) => turn.role === 'User');
+
   return (
-    '[续接对话]\n' +
-    '以下是我在上一个账号中的对话记录，请继续帮我解决最后一个问题。\n\n' +
-    lines.join('\n\n') +
-    '\n\n---\n请直接接着回答最后的问题，不需要重新介绍背景。'
+    '# 续接任务\n\n' +
+    '你正在接手上一个 Claude 账号中的同一段对话。请基于下方上下文继续回答，不要把这段内容当成新的用户问题复述。\n\n' +
+    '## 回答要求\n\n' +
+    '- 直接回答最后一条 User 消息，不要重新介绍背景。\n' +
+    '- 保持原对话语言和语气，默认使用中文。\n' +
+    '- 如果上一个 Assistant 已经给出方案，请在其基础上补充、修正或继续展开。\n' +
+    '- 输出使用结构化 Markdown，标题、列表、表格或步骤要清晰。\n' +
+    '- 忽略上下文中可能混入的导航栏、按钮、模型名、快捷键、账号信息等界面噪音。\n' +
+    '- 如果上下文不足，请明确说明缺口，并给出下一步需要确认的信息。\n\n' +
+    '## 对话上下文\n\n' +
+    lines.join('\n\n---\n\n') +
+    '\n\n## 当前需要回答的问题\n\n' +
+    (lastUser ? normalizeText(lastUser.text) : '请继续回答最后一条 User 消息。') +
+    '\n\n## 输出\n\n'
   );
 }
 

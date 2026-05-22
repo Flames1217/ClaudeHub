@@ -456,7 +456,13 @@ async function collectSnapshotImages(root) {
 }
 
 async function snapshotConversation() {
-  const normalizeText = (text) => (text || '')
+  const stripNonConversationText = (text) => String(text || '')
+    .replace(/\(function\(\)\{function c\(\)\{[\s\S]*?document\.onreadystatechange=e,c\(\)\}\}\}\}\)\(\);?/g, ' ')
+    .replace(/window\.__CF\$cv\$params=[\s\S]*?challenge-platform\/scripts\/jsd\/main\.js['"];?/g, ' ')
+    .replace(/You are out of free messages until[^\n]*/gi, ' ')
+    .replace(/Claude is AI and can make mistakes[^\n]*/gi, ' ');
+
+  const normalizeText = (text) => stripNonConversationText(text)
     .replace(/\u00a0/g, ' ')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -472,14 +478,20 @@ async function snapshotConversation() {
     const exactNoise = new Set([
       'Claude', 'New chat', 'Search', 'Chats', 'Projects', 'Artifacts', 'Code',
       'Customize', 'Recents', 'Share', 'Upgrade', 'Free plan', 'Write a message...',
-      'Sonnet 4.6', 'Adaptive', 'Hide'
+      'Sonnet 4.6', 'Adaptive', 'Hide', 'Get more'
     ]);
     if (exactNoise.has(line)) return true;
     return [
       /^Ctrl[+⇧]/i,
       /^Claude is AI/i,
+      /^Claude can make mistakes/i,
       /^Claude responded:/i,
       /^You said:/i,
+      /^You are out of free messages until/i,
+      /^window\.__CF\$cv\$params=/,
+      /^document\.getElementsByTagName\('head'\)/,
+      /^\/cdn-cgi\/challenge-platform\//,
+      /^\(function\(\)\{function c\(\)/,
       /^5月\d+日$/,
       /^.+账号$/,
       /^共\s*\d+\s*个账号$/,
@@ -506,6 +518,10 @@ async function snapshotConversation() {
       'input',
       'textarea',
       'select',
+      'script',
+      'style',
+      'noscript',
+      'iframe',
       '[role="navigation"]',
       '[role="button"]',
       '[aria-label]',
@@ -555,8 +571,14 @@ async function snapshotConversation() {
     '[data-testid="human-turn"]',
     '[data-testid="assistant-message"]',
     '[data-testid="ai-turn"]',
+    '[data-testid*="assistant-turn"]',
+    '[data-is-streaming]',
     '.font-claude-message',
-    '[class*="font-claude-message"]'
+    '[class*="font-claude-message"]',
+    '.prose',
+    '[class*="prose"]',
+    '.markdown',
+    '[class*="markdown"]'
   ].join(',');
 
   const candidates = Array.from(document.querySelectorAll(selector))
@@ -587,14 +609,17 @@ async function snapshotConversation() {
   let fallbackText = getReadableText(main);
 
   if (turns.length > 0) {
-    const hasClaude = turns.some((turn) => turn.role === 'Claude');
-    if (!hasClaude && fallbackText) {
-      for (const turn of turns) {
-        fallbackText = normalizeText(fallbackText.replace(turn.text, ''));
-      }
-      if (fallbackText.length > 30) {
-        turns.push({ role: 'Claude', text: fallbackText });
-      }
+    for (const turn of turns) {
+      fallbackText = normalizeText(fallbackText.replace(turn.text, ''));
+    }
+    const lastTurn = turns[turns.length - 1];
+    const missingTail = normalizeText(fallbackText);
+    if (
+      missingTail.length > 40 &&
+      (!lastTurn || !lastTurn.text.includes(missingTail)) &&
+      !turns.some((turn) => normalizeText(turn.text) === missingTail)
+    ) {
+      turns.push({ role: 'Claude', text: missingTail });
     }
     return { turns, images: await collectSnapshotImages(main) };
   }
@@ -676,53 +701,78 @@ function buildContinuePrompt(turns, images = []) {
 
   const normalizeText = (text) => (text || '')
     .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-  const ASSISTANT_MAX = 1200;
-  const USER_MAX = 1800;
-  const lines = safeTurns.map((t, i) => {
-    const isLast = i === turns.length - 1;
-    const role = t.role === 'Claude' ? 'Assistant' : 'User';
-    const limit = role === 'Assistant' ? ASSISTANT_MAX : USER_MAX;
-    let text = normalizeText(t.text);
-    if (!isLast && text.length > limit) {
-      text = text.slice(0, limit) + '\n\n> [中间消息过长，已截断]';
-    }
-    return `### ${i + 1}. ${role}\n\n${text}`;
+  const clip = (text, limit) => {
+    const clean = normalizeText(text);
+    if (clean.length <= limit) return clean;
+    const head = clean.slice(0, Math.floor(limit * 0.62)).trim();
+    const tail = clean.slice(-Math.floor(limit * 0.28)).trim();
+    return `${head}\n\n...[compressed ${clean.length - head.length - tail.length} chars]...\n\n${tail}`;
+  };
+
+  const roleName = (turn) => turn.role === 'Claude' ? 'Assistant' : 'User';
+  const lastTurn = safeTurns[safeTurns.length - 1] || null;
+  const lastUser = [...safeTurns].reverse().find((turn) => turn.role === 'User');
+  const recentCount = 6;
+  const oldTurns = safeTurns.slice(0, Math.max(0, safeTurns.length - recentCount));
+  const recentTurns = safeTurns.slice(-recentCount);
+  const oldDigestTurns = oldTurns.slice(-10);
+
+  const oldDigest = oldDigestTurns.map((t, i) => {
+    const originalIndex = oldTurns.length - oldDigestTurns.length + i + 1;
+    return `${originalIndex}. ${roleName(t)}: ${clip(t.text, 220)}`;
   });
 
-  const lastUser = [...safeTurns].reverse().find((turn) => turn.role === 'User');
+  const recentLines = recentTurns.map((t, i) => {
+    const originalIndex = safeTurns.length - recentTurns.length + i + 1;
+    const isLast = t === lastTurn;
+    const role = roleName(t);
+    const limit = isLast ? 2600 : (role === 'Assistant' ? 900 : 1100);
+    return `### ${originalIndex}. ${role}\n\n${clip(t.text, limit)}`;
+  });
+
   const imageSection = Array.isArray(images) && images.length > 0
     ? (
-      '## 附带图片\n\n' +
+      '## Attached images\n\n' +
       images.map((image, index) => {
-        const sizeKb = image.bytes ? `${Math.round(image.bytes / 1024)}KB` : '未知大小';
-        const dims = image.width && image.height ? `${image.width}x${image.height}` : '未知尺寸';
-        const alt = image.alt ? `，说明：${image.alt}` : '';
-        return `- 图片 ${index + 1}: ${image.name || `image-${index + 1}`}（${dims}，${sizeKb}${alt}）`;
+        const sizeKb = image.bytes ? `${Math.round(image.bytes / 1024)}KB` : 'unknown size';
+        const dims = image.width && image.height ? `${image.width}x${image.height}` : 'unknown dimensions';
+        const alt = image.alt ? `, alt: ${image.alt}` : '';
+        return `- Image ${index + 1}: ${image.name || `image-${index + 1}`}, ${dims}, ${sizeKb}${alt}`;
       }).join('\n') +
-      '\n\n> 插件会尝试把这些图片作为附件一并粘贴到当前对话。如果你看不到图片附件，请提醒用户重新上传对应图片。\n\n'
+      '\n\n> The extension will try to paste these images as attachments. If the attachments are missing, ask the user to upload them again.\n\n'
     )
     : '';
 
+  const olderSection = oldDigest.length
+    ? `## Older context digest\n\n> Older turns are compressed to save quota. The latest ${recentTurns.length} turns below keep more detail.\n\n${oldDigest.join('\n\n')}\n\n`
+    : '';
+  const recentSection = recentLines.length
+    ? recentLines.join('\n\n---\n\n')
+    : '> The previous context is mainly image attachments. Continue using the attached images.';
+  const currentNeed = lastTurn?.role === 'Claude'
+    ? 'The last Assistant turn may be the newest reply. Continue from that exact point: if it is incomplete, finish it; if it is complete, add only useful next steps or corrections. Do not repeat the whole answer.'
+    : (lastUser ? clip(lastUser.text, 1200) : 'Continue answering the user using the attached images.');
+
   return (
-    '# 续接任务\n\n' +
-    '你正在接手上一个 Claude 账号中的同一段对话。请基于下方上下文继续回答，不要把这段内容当成新的用户问题复述。\n\n' +
-    '## 回答要求\n\n' +
-    '- 直接回答最后一条 User 消息，不要重新介绍背景。\n' +
-    '- 保持原对话语言和语气，默认使用中文。\n' +
-    '- 如果上一个 Assistant 已经给出方案，请在其基础上补充、修正或继续展开。\n' +
-    '- 输出使用结构化 Markdown，标题、列表、表格或步骤要清晰。\n' +
-    '- 忽略上下文中可能混入的导航栏、按钮、模型名、快捷键、账号信息等界面噪音。\n' +
-    '- 如果存在“附带图片”，请结合图片附件和图片清单理解上下文。\n' +
-    '- 如果上下文不足，请明确说明缺口，并给出下一步需要确认的信息。\n\n' +
+    '# Continue task\n\n' +
+    'You are taking over the same conversation from another Claude account. The context below has been compressed to save quota. Continue directly; do not restate this handoff prompt.\n\n' +
+    '## Response rules\n\n' +
+    '- Continue from the final turn in Recent context. Preserve the last Assistant reply; do not ignore it.\n' +
+    '- Use the original conversation language and tone. If the prior conversation is Chinese, reply in Chinese.\n' +
+    '- If the final Assistant turn is unfinished, continue from the cutoff point. If it is finished, only add necessary follow-up, fixes, or next steps.\n' +
+    '- Ignore UI noise such as navigation, buttons, model names, hotkeys, account data, and usage banners.\n' +
+    '- If the context is insufficient, state the missing information and ask for the smallest needed clarification.\n\n' +
     imageSection +
-    '## 对话上下文\n\n' +
-    (lines.length ? lines.join('\n\n---\n\n') : '> 上一轮上下文主要由图片组成，请结合“附带图片”继续。') +
-    '\n\n## 当前需要回答的问题\n\n' +
-    (lastUser ? normalizeText(lastUser.text) : '请结合附带图片继续回答用户上一轮问题。') +
-    '\n\n## 输出\n\n'
+    olderSection +
+    '## Recent context\n\n' +
+    recentSection +
+    '\n\n## Current task\n\n' +
+    currentNeed +
+    '\n\n## Output\n\n'
   );
 }
 
